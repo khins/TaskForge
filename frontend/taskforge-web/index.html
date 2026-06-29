@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TaskForge</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; background: #0f172a; color: #f8fafc; }
+      main { max-width: 900px; margin: 0 auto; padding: 2rem; }
+      .card { background: #111827; padding: 1.25rem; border-radius: 12px; margin-top: 1rem; }
+      button { background: #2563eb; color: white; border: none; padding: 0.6rem 1rem; border-radius: 8px; cursor: pointer; }
+      input, textarea { width: 100%; padding: 0.7rem; border-radius: 8px; border: 1px solid #334155; margin-top: 0.5rem; background: #020617; color: white; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>TaskForge</h1>
+      <p>Minimal browser view for local testing.</p>
+      <div class="card">
+        <h2>Backend health</h2>
+        <p id="health">Checking...</p>
+        <button onclick="loadHealth()">Refresh</button>
+      </div>
+      <div class="card">
+        <h2>Create project</h2>
+        <input id="projectName" placeholder="Project name" />
+        <textarea id="projectDescription" placeholder="Project description" rows="3"></textarea>
+        <button onclick="createProject()" style="margin-top: 0.75rem;">Create project</button>
+      </div>
+      <div class="card">
+        <h2>Projects</h2>
+        <pre id="projects">Loading...</pre>
+      </div>
+    </main>
+    <script>
+      async function loadHealth() {
+        const res = await fetch('http://127.0.0.1:5010/health');
+        const data = await res.json();
+        document.getElementById('health').textContent = JSON.stringify(data);
+      }
+
+      async function loadProjects() {
+        const res = await fetch('http://127.0.0.1:5010/api/projects', {
+          headers: { Authorization: 'Bearer test' }
+        });
+        const data = await res.json();
+        document.getElementById('projects').textContent = JSON.stringify(data, null, 2);
+      }
+
+      async function createProject() {
+        const name = document.getElementById('projectName').value;
+        const description = document.getElementById('projectDescription').value;
+        const res = await fetch('http://127.0.0.1:5010/api/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test' },
+          body: JSON.stringify({ name, description })
+        });
+        const data = await res.json();
+        alert(JSON.stringify(data));
+        loadProjects();
+      }
+
+      loadHealth();
+      loadProjects();
+    </script>
+  </body>
+</html>

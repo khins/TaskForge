@@ -1,0 +1,11 @@
+{
+  "name": "taskforge-web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "serve -s . -l 8000"
+  },
+  "dependencies": {
+    "serve": "^14.0.1"
+  }
+}

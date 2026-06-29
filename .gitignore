@@ -1,0 +1,56 @@
+# .NET / C#
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+.vs/
+.vscode/
+*.csproj.user
+*.sln.DotSettings.user
+launchSettings.json
+appsettings.*.json
+!appsettings.json
+
+# Entity Framework Core
+*.db
+*.db-shm
+*.db-wal
+Migrations/
+
+# Node.js / npm
+node_modules/
+dist/
+build/
+.next/
+out/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+Thumbs.db
+.DS_Store
+*.log
