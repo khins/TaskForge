@@ -1,0 +1,27 @@
+# Start
+docker compose -f docker/docker-compose.postgres.yml up -d
+
+# Stop
+docker compose -f docker/docker-compose.postgres.yml down
+
+# Logs
+docker compose -f docker/docker-compose.postgres.yml logs -f db
+
+# Cleanup everything (including volume)
+docker compose -f docker/docker-compose.postgres.yml down -v
+
+To run everything locally:
+
+Terminal 1 – Database:
+cd C:\Users\Kevin\source\repos\TaskForge
+docker compose -f docker/docker-compose.postgres.yml up -d
+
+Terminal 2 – Backend API (port 5010):
+cd C:\Users\Kevin\source\repos\TaskForge\backend\TaskForge.Api
+dotnet run --urls http://127.0.0.1:5010
+
+Terminal 3 – Frontend (port 8000):
+cd C:\Users\Kevin\source\repos\TaskForge\frontend\taskforge-web
+python -m http.server 8000
+
+Then open http://127.0.0.1:8000 in your browser and test the API calls.
