@@ -13,4 +13,16 @@ public class TaskItem
 
     public long ProjectId { get; set; }
     public Project Project { get; set; } = null!;
+    public long? BoardColumnId { get; set; }
+    public BoardColumn? BoardColumn { get; set; }
+    public long? AssigneeId { get; set; }
+    public User? Assignee { get; set; }
+    public long? ReporterId { get; set; }
+    public User? Reporter { get; set; }
+    public int Position { get; set; }
+
+    public ICollection<TaskComment> Comments { get; set; } = new List<TaskComment>();
+    public ICollection<TaskStatusHistory> StatusHistory { get; set; } = new List<TaskStatusHistory>();
+    public ICollection<TaskLabel> TaskLabels { get; set; } = new List<TaskLabel>();
+    public ICollection<Attachment> Attachments { get; set; } = new List<Attachment>();
 }
