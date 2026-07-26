@@ -6,6 +6,8 @@ const state = {
   project: null,
   board: null,
   tasks: [],
+  selectedTask: null,
+  comments: [],
   authMode: "login",
   dialogMode: null
 };
@@ -174,7 +176,7 @@ function renderBoard() {
     const tasks = state.tasks.filter(task => task.boardColumnId === column.id);
     return `<section class="kanban-column">
       <div class="column-head"><h3>${escapeHtml(column.name)}</h3><span class="count-pill">${tasks.length}</span></div>
-      ${tasks.map(task => `<article class="task-card"><span class="priority ${task.priority.toLowerCase()}">${escapeHtml(task.priority)}</span><h4>${escapeHtml(task.title)}</h4><p>${escapeHtml(task.description || "No description")}</p><div class="task-meta">${task.dueDate ? `Due ${new Date(task.dueDate).toLocaleDateString()}` : "No due date"}</div></article>`).join("")}
+      ${tasks.map(task => `<button class="task-card" data-task="${task.id}" type="button" aria-label="Edit ${escapeHtml(task.title)}"><span class="priority ${task.priority.toLowerCase()}">${escapeHtml(task.priority)}</span><h4>${escapeHtml(task.title)}</h4><p>${escapeHtml(task.description || "No description")}</p><div class="task-meta">${task.dueDate ? `Due ${new Date(task.dueDate).toLocaleDateString()}` : "No due date"}<span>Edit →</span></div></button>`).join("")}
     </section>`;
   }).join("");
 }
@@ -187,9 +189,33 @@ function escapeHtml(value = "") {
   return String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]);
 }
 
-function openDialog(mode) {
-  if ((mode === "board" || mode === "task") && !state.project) return toast("Choose a project first.", "error");
-  if (mode === "task" && !state.board) return toast("Choose a board first.", "error");
+function taskFields(task = {}, includeComments = false) {
+  task ??= {};
+  const dueDate = task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : "";
+  return `
+    <label class="field">Task title<input name="title" placeholder="What needs to be done?" value="${escapeHtml(task.title || "")}" required autofocus /></label>
+    <label class="field">Description<textarea name="description" rows="3" placeholder="Add useful details or context">${escapeHtml(task.description || "")}</textarea></label>
+    <label class="field">Workflow stage<select name="boardColumnId">${state.board?.columns.map(c => `<option value="${c.id}" ${c.id === task.boardColumnId ? "selected" : ""}>${escapeHtml(c.name)}</option>`).join("") || ""}</select></label>
+    <label class="field">Priority<select name="priority">${["Medium", "High", "Urgent", "Low"].map(priority => `<option ${priority === task.priority ? "selected" : ""}>${priority}</option>`).join("")}</select></label>
+    <label class="field">Due date<input name="dueDate" type="date" value="${dueDate}" /></label>
+    ${includeComments ? `
+      <section class="comments-section" aria-labelledby="commentsHeading">
+        <div class="comments-heading"><div><h3 id="commentsHeading">Comments</h3><p>Share updates and keep the conversation with the work.</p></div><span id="commentCount" class="count-pill">0</span></div>
+        <div id="commentsList" class="comments-list"><p class="comments-empty">Loading comments…</p></div>
+        <div class="comment-composer">
+          <div class="avatar">${initials(state.user?.name || state.user?.email)}</div>
+          <div>
+            <textarea id="commentBody" rows="3" maxlength="4000" placeholder="Write a comment…" aria-label="New comment"></textarea>
+            <div class="comment-composer-actions"><small>Keep it clear and actionable.</small><button id="postCommentButton" class="button primary compact" type="button">Post comment</button></div>
+          </div>
+        </div>
+      </section>` : ""}`;
+}
+
+function openDialog(mode, task = null) {
+  if ((mode === "board" || mode === "task" || mode === "editTask") && !state.project) return toast("Choose a project first.", "error");
+  if ((mode === "task" || mode === "editTask") && !state.board) return toast("Choose a board first.", "error");
+  state.selectedTask = mode === "editTask" ? task : null;
   state.dialogMode = mode;
   const configs = {
     project: { eyebrow: "Create project", title: "What are you working on?", submit: "Create project", fields: `
@@ -199,12 +225,8 @@ function openDialog(mode) {
       <label class="field">Board name<input name="name" placeholder="e.g. Product delivery" required autofocus /></label>
       <label class="field">Description<textarea name="description" rows="3" placeholder="How will this board be used?"></textarea></label>
       <label class="field">Starting columns<select name="createDefaultColumns"><option value="true">Todo, In Progress, Done</option><option value="false">Start with an empty board</option></select></label>` },
-    task: { eyebrow: "Create task", title: "Add work to the board", submit: "Add task", fields: `
-      <label class="field">Task title<input name="title" placeholder="What needs to be done?" required autofocus /></label>
-      <label class="field">Description<textarea name="description" rows="3" placeholder="Add useful details or context"></textarea></label>
-      <label class="field">Column<select name="boardColumnId">${state.board?.columns.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("") || ""}</select></label>
-      <label class="field">Priority<select name="priority"><option>Medium</option><option>High</option><option>Urgent</option><option>Low</option></select></label>
-      <label class="field">Due date<input name="dueDate" type="date" /></label>` }
+    task: { eyebrow: "Create task", title: "Add work to the board", submit: "Add task", fields: taskFields() },
+    editTask: { eyebrow: "Edit task", title: "Update this task", submit: "Save changes", fields: taskFields(task, true) }
   };
   const config = configs[mode];
   $("dialogEyebrow").textContent = config.eyebrow;
@@ -212,6 +234,52 @@ function openDialog(mode) {
   $("dialogSubmit").textContent = config.submit;
   $("dialogFields").innerHTML = config.fields;
   $("entityDialog").showModal();
+  if (mode === "editTask") loadComments(task.id);
+}
+
+async function loadComments(taskId) {
+  try {
+    state.comments = await api(`/api/tasks/${taskId}/comments`);
+    renderComments();
+  } catch (error) {
+    $("commentsList").innerHTML = `<p class="comments-empty error-text">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+function renderComments() {
+  const list = $("commentsList");
+  if (!list) return;
+  $("commentCount").textContent = state.comments.length;
+  list.innerHTML = state.comments.length ? state.comments.map(comment => {
+    const created = new Date(comment.createdAt);
+    const edited = new Date(comment.updatedAt).getTime() - created.getTime() > 1000;
+    return `<article class="comment">
+      <div class="avatar">${initials(comment.authorName)}</div>
+      <div class="comment-content">
+        <div class="comment-meta"><strong>${escapeHtml(comment.authorName)}</strong><time datetime="${comment.createdAt}">${created.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</time>${edited ? "<span>edited</span>" : ""}</div>
+        <p>${escapeHtml(comment.body).replace(/\n/g, "<br>")}</p>
+      </div>
+    </article>`;
+  }).join("") : `<p class="comments-empty">No comments yet. Start the conversation.</p>`;
+}
+
+async function postComment() {
+  const body = $("commentBody")?.value.trim();
+  if (!body) return toast("Write a comment before posting.", "error");
+  const button = $("postCommentButton");
+  button.disabled = true;
+  try {
+    const comment = await api(`/api/tasks/${state.selectedTask.id}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ body })
+    });
+    state.comments.push(comment);
+    $("commentBody").value = "";
+    renderComments();
+    $("commentsList").lastElementChild?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    toast("Comment posted.");
+  } catch (error) { toast(error.message, "error"); }
+  finally { button.disabled = false; }
 }
 
 async function submitDialog(event) {
@@ -228,13 +296,19 @@ async function submitDialog(event) {
       await api(`/api/projects/${state.project.id}/boards`, { method: "POST", body: JSON.stringify(values) });
       await openProject(state.project.id);
       toast("Board created.");
-    } else {
+    } else if (state.dialogMode === "task" || state.dialogMode === "editTask") {
       values.boardColumnId = Number(values.boardColumnId);
       values.dueDate = values.dueDate ? new Date(`${values.dueDate}T12:00:00`).toISOString() : null;
       values.status = state.board.columns.find(c => c.id === values.boardColumnId)?.name || "Todo";
-      await api(`/api/projects/${state.project.id}/tasks`, { method: "POST", body: JSON.stringify(values) });
+      if (state.dialogMode === "editTask") {
+        values.assigneeId = state.selectedTask.assigneeId;
+        values.position = state.selectedTask.position;
+        await api(`/api/tasks/${state.selectedTask.id}`, { method: "PUT", body: JSON.stringify(values) });
+      } else {
+        await api(`/api/projects/${state.project.id}/tasks`, { method: "POST", body: JSON.stringify(values) });
+      }
       await openBoard(state.board.id);
-      toast("Task added.");
+      toast(state.dialogMode === "editTask" ? "Task updated." : "Task added.");
     }
     $("entityDialog").close();
   } catch (error) { toast(error.message, "error"); }
@@ -246,12 +320,21 @@ $("logoutButton").addEventListener("click", () => logout());
 $("projectSearch").addEventListener("input", renderProjects);
 $("projectsGrid").addEventListener("click", e => e.target.dataset.project && openProject(e.target.dataset.project));
 $("boardsGrid").addEventListener("click", e => e.target.dataset.board && openBoard(e.target.dataset.board));
+$("kanban").addEventListener("click", e => {
+  const card = e.target.closest("[data-task]");
+  if (!card) return;
+  const task = state.tasks.find(item => item.id === Number(card.dataset.task));
+  if (task) openDialog("editTask", task);
+});
 $("backToProjects").addEventListener("click", () => showView("projects"));
 $("backToProject").addEventListener("click", () => showView("project"));
 $("newBoardButton").addEventListener("click", () => openDialog("board"));
 $("newTaskButton").addEventListener("click", () => openDialog("task"));
 $("primaryAction").addEventListener("click", e => openDialog(e.currentTarget.dataset.action || "project"));
 $("entityForm").addEventListener("submit", submitDialog);
+$("dialogFields").addEventListener("click", event => {
+  if (event.target.id === "postCommentButton") postComment();
+});
 $("dialogClose").addEventListener("click", () => $("entityDialog").close());
 $("dialogCancel").addEventListener("click", () => $("entityDialog").close());
 $("refreshButton").addEventListener("click", () => state.board ? openBoard(state.board.id) : state.project ? openProject(state.project.id) : loadProjects());

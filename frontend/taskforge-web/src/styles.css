@@ -112,18 +112,43 @@ button { cursor: pointer; }
 .column-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .column-head h3 { margin: 0; font: 700 13px "Manrope"; text-transform: uppercase; letter-spacing: .5px; }
 .count-pill { min-width: 24px; padding: 4px 7px; color: var(--muted); background: white; border-radius: 99px; text-align: center; font-size: 10px; }
-.task-card { margin-bottom: 10px; padding: 15px; background: white; border: 1px solid #e0e4df; border-radius: 9px; box-shadow: 0 3px 12px rgba(34,52,47,.04); }
+.task-card { display: block; width: 100%; margin-bottom: 10px; padding: 15px; color: var(--ink); background: white; border: 1px solid #e0e4df; border-radius: 9px; box-shadow: 0 3px 12px rgba(34,52,47,.04); text-align: left; transition: .2s; }
+.task-card:hover { transform: translateY(-2px); border-color: #aebfb7; box-shadow: 0 8px 22px rgba(34,52,47,.09); }
+.task-card:focus-visible { outline: 3px solid rgba(23,107,91,.2); border-color: var(--green); }
 .task-card h4 { margin: 8px 0; font-size: 13px; }.task-card p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
 .priority { display: inline-block; padding: 3px 7px; color: #7c573f; background: #faeadf; border-radius: 4px; font-size: 9px; font-weight: 700; text-transform: uppercase; }
 .priority.high, .priority.urgent { color: #9d3d37; background: #fbe0dc; }.priority.low { color: #34715f; background: #def1e9; }
-.task-meta { margin-top: 12px; color: #87928c; font-size: 10px; }
+.task-meta { display: flex; justify-content: space-between; gap: 10px; margin-top: 12px; color: #87928c; font-size: 10px; }
+.task-meta span { color: var(--green); font-weight: 700; opacity: 0; transition: .2s; }
+.task-card:hover .task-meta span, .task-card:focus-visible .task-meta span { opacity: 1; }
 
-dialog { width: min(520px, calc(100% - 32px)); padding: 0; border: 0; border-radius: 14px; box-shadow: 0 30px 90px rgba(20,38,32,.25); }
+dialog { width: min(620px, calc(100% - 32px)); max-height: calc(100vh - 40px); padding: 0; border: 0; border-radius: 14px; box-shadow: 0 30px 90px rgba(20,38,32,.25); }
 dialog::backdrop { background: rgba(15, 31, 27, .5); backdrop-filter: blur(3px); }
 dialog form { padding: 27px; }
 .dialog-head { display: flex; justify-content: space-between; align-items: start; margin-bottom: 22px; }
 .dialog-head h2 { margin: 0; font: 800 23px "Manrope"; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 26px; }
+.comments-section { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line); }
+.comments-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+.comments-heading h3 { margin: 0 0 4px; font: 700 16px "Manrope"; }
+.comments-heading p { margin: 0; color: var(--muted); font-size: 11px; }
+.comments-list { max-height: 250px; margin: 18px 0; overflow-y: auto; }
+.comments-empty { padding: 18px; color: var(--muted); background: #f6f7f4; border-radius: 8px; text-align: center; font-size: 12px; }
+.error-text { color: #9d3d37; }
+.comment { display: grid; grid-template-columns: 34px 1fr; gap: 11px; padding: 12px 0; border-bottom: 1px solid #edf0ec; }
+.comment:last-child { border-bottom: 0; }
+.comment-content { min-width: 0; }
+.comment-meta { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; font-size: 10px; }
+.comment-meta strong { color: var(--ink); font-size: 12px; }
+.comment-meta time, .comment-meta span { color: #8a948f; }
+.comment-content p { margin: 6px 0 0; color: #46545a; font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+.comment-composer { display: grid; grid-template-columns: 34px 1fr; gap: 11px; }
+.comment-composer textarea { width: 100%; padding: 11px 12px; color: var(--ink); background: #fbfbf9; border: 1px solid #d7dcd7; border-radius: 8px; outline: none; resize: vertical; }
+.comment-composer textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(23,107,91,.1); }
+.comment-composer-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+.comment-composer-actions small { color: var(--muted); font-size: 10px; }
+.button.compact { min-height: 34px; padding: 7px 12px; font-size: 11px; }
+.button:disabled { cursor: wait; opacity: .65; }
 .toast { position: fixed; z-index: 99; right: 24px; bottom: 24px; max-width: 360px; padding: 13px 17px; color: white; background: var(--ink); border-radius: 8px; box-shadow: var(--shadow); opacity: 0; transform: translateY(12px); pointer-events: none; transition: .25s; }
 .toast.show { opacity: 1; transform: translateY(0); }
 .toast.error { background: #9d3d37; }
