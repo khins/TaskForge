@@ -7,6 +7,7 @@ const state = {
   board: null,
   tasks: [],
   labels: [],
+  labelFilter: null,
   selectedTask: null,
   selectedLabel: null,
   comments: [],
@@ -150,6 +151,7 @@ function renderProjects() {
 
 async function openProject(id) {
   try {
+    state.labelFilter = null;
     [state.project, state.labels] = await Promise.all([
       api(`/api/projects/${id}`),
       api(`/api/projects/${id}/labels`)
@@ -189,14 +191,30 @@ async function openBoard(id) {
     ));
     $("boardTitle").textContent = state.board.name;
     $("boardDescription").textContent = state.board.description || `${state.board.columns.length} stage workflow`;
+    renderLabelFilter();
     renderBoard();
     showView("board");
   } catch (error) { toast(error.message, "error"); }
 }
 
+function renderLabelFilter() {
+  const filter = $("labelFilter");
+  filter.innerHTML = `<option value="">All labels</option>${state.labels.map(label =>
+    `<option value="${label.id}" ${String(label.id) === String(state.labelFilter || "") ? "selected" : ""}>${escapeHtml(label.name)}</option>`
+  ).join("")}`;
+  $("clearLabelFilter").classList.toggle("hidden", !state.labelFilter);
+}
+
 function renderBoard() {
+  const matchingTasks = state.labelFilter
+    ? state.tasks.filter(task => (task.labels || []).some(label => label.id === Number(state.labelFilter)))
+    : state.tasks;
+  $("filterResultCount").textContent = state.labelFilter
+    ? `${matchingTasks.length} ${matchingTasks.length === 1 ? "task" : "tasks"}`
+    : "";
+  $("clearLabelFilter").classList.toggle("hidden", !state.labelFilter);
   $("kanban").innerHTML = state.board.columns.map(column => {
-    const tasks = state.tasks.filter(task => task.boardColumnId === column.id);
+    const tasks = matchingTasks.filter(task => task.boardColumnId === column.id);
     return `<section class="kanban-column">
       <div class="column-head"><h3>${escapeHtml(column.name)}</h3><span class="count-pill">${tasks.length}</span></div>
       ${tasks.map(task => `<button class="task-card" data-task="${task.id}" type="button" aria-label="Edit ${escapeHtml(task.title)}"><div class="task-badges"><span class="priority ${task.priority.toLowerCase()}">${escapeHtml(task.priority)}</span>${(task.labels || []).map(label => `<span class="task-label" style="--label-color:${safeColor(label.color)}">${escapeHtml(label.name)}</span>`).join("")}</div><h4>${escapeHtml(task.title)}</h4><p>${escapeHtml(task.description || "No description")}</p><div class="task-meta">${task.dueDate ? `Due ${new Date(task.dueDate).toLocaleDateString()}` : "No due date"}<span>Edit →</span></div></button>`).join("")}
@@ -418,6 +436,15 @@ $("backToProject").addEventListener("click", () => showView("project"));
 $("newBoardButton").addEventListener("click", () => openDialog("board"));
 $("newLabelButton").addEventListener("click", () => openDialog("label"));
 $("newTaskButton").addEventListener("click", () => openDialog("task"));
+$("labelFilter").addEventListener("change", event => {
+  state.labelFilter = event.target.value ? Number(event.target.value) : null;
+  renderBoard();
+});
+$("clearLabelFilter").addEventListener("click", () => {
+  state.labelFilter = null;
+  $("labelFilter").value = "";
+  renderBoard();
+});
 $("primaryAction").addEventListener("click", e => openDialog(e.currentTarget.dataset.action || "project"));
 $("entityForm").addEventListener("submit", submitDialog);
 $("dialogFields").addEventListener("click", event => {

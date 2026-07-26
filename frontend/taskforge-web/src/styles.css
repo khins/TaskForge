@@ -126,6 +126,11 @@ button { cursor: pointer; }
 .labels-empty { width: 100%; padding: 18px; color: var(--muted); background: white; border: 1px dashed #cbd2cb; border-radius: 9px; font-size: 12px; }
 .board-card .card-icon { margin-bottom: 18px; }
 .board-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin: 28px 0 20px; }
+.board-actions { display: flex; align-items: end; gap: 10px; }
+.label-filter { display: grid; gap: 5px; color: var(--muted); font-size: 10px; font-weight: 600; }
+.label-filter select { min-width: 175px; min-height: 42px; padding: 8px 34px 8px 11px; color: var(--ink); background: white; border: 1px solid var(--line); border-radius: 8px; outline: none; }
+.label-filter select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(23,107,91,.1); }
+.filter-result { align-self: center; color: var(--muted); font-size: 11px; white-space: nowrap; }
 .kanban { display: grid; grid-auto-columns: minmax(270px, 1fr); grid-auto-flow: column; gap: 14px; overflow-x: auto; padding-bottom: 20px; }
 .kanban-column { min-height: 450px; padding: 14px; background: #eceee9; border-radius: 12px; }
 .column-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
@@ -185,4 +190,5 @@ dialog form { padding: 27px; }
   .topbar { padding: 16px; }.content { padding: 24px 16px 50px; }.topbar .eyebrow { display: none; }.topbar h1 { font-size: 21px; }
   .top-actions .icon-button { display: none; }.section-heading { align-items: stretch; flex-direction: column; }.search { width: 100%; }
   .project-card p, .board-card p { min-height: auto; }.board-toolbar { align-items: stretch; flex-direction: column; }
+  .board-actions { align-items: stretch; flex-wrap: wrap; }.label-filter { flex: 1 1 100%; }.label-filter select { width: 100%; }
 }

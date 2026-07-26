@@ -112,7 +112,16 @@
           <button id="backToProject" class="back-button">← Project boards</button>
           <div class="board-toolbar">
             <div><h2 id="boardTitle">Board</h2><p id="boardDescription"></p></div>
-            <button id="newTaskButton" class="button primary">+ Add task</button>
+            <div class="board-actions">
+              <label class="label-filter"><span>Filter by label</span>
+                <select id="labelFilter" aria-label="Filter tasks by label">
+                  <option value="">All labels</option>
+                </select>
+              </label>
+              <span id="filterResultCount" class="filter-result" aria-live="polite"></span>
+              <button id="clearLabelFilter" class="text-button hidden" type="button">Clear</button>
+              <button id="newTaskButton" class="button primary">+ Add task</button>
+            </div>
           </div>
           <div id="kanban" class="kanban"></div>
         </section>
@@ -127,6 +136,6 @@
       </form>
     </dialog>
 
-    <script src="src/app.js?v=5"></script>
+    <script src="src/app.js?v=6"></script>
   </body>
 </html>
