@@ -6,7 +6,9 @@ const state = {
   project: null,
   board: null,
   tasks: [],
+  labels: [],
   selectedTask: null,
+  selectedLabel: null,
   comments: [],
   authMode: "login",
   dialogMode: null
@@ -148,8 +150,12 @@ function renderProjects() {
 
 async function openProject(id) {
   try {
-    state.project = await api(`/api/projects/${id}`);
+    [state.project, state.labels] = await Promise.all([
+      api(`/api/projects/${id}`),
+      api(`/api/projects/${id}/labels`)
+    ]);
     $("projectHero").innerHTML = `<h2>${escapeHtml(state.project.name)}</h2><p>${escapeHtml(state.project.description || "A focused place for this project's work.")}</p>`;
+    renderLabels();
     $("boardsGrid").innerHTML = state.project.boards.length ? state.project.boards.map(board => `
       <article class="board-card">
         <button class="card-hit" data-board="${board.id}" aria-label="Open ${escapeHtml(board.name)}"></button>
@@ -161,9 +167,26 @@ async function openProject(id) {
   } catch (error) { toast(error.message, "error"); }
 }
 
+function renderLabels() {
+  $("labelsGrid").innerHTML = state.labels.length ? state.labels.map(label => `
+    <article class="label-card">
+      <div class="label-card-main">
+        <span class="label-swatch" style="--label-color:${safeColor(label.color)}"></span>
+        <div><strong>${escapeHtml(label.name)}</strong><small>${label.taskCount} ${label.taskCount === 1 ? "task" : "tasks"}</small></div>
+      </div>
+      <div class="label-actions">
+        <button class="text-button" type="button" data-edit-label="${label.id}">Edit</button>
+        <button class="text-button danger" type="button" data-delete-label="${label.id}">Delete</button>
+      </div>
+    </article>`).join("") : `<div class="labels-empty">No labels yet. Add one to make tasks easier to scan.</div>`;
+}
+
 async function openBoard(id) {
   try {
     [state.board, state.tasks] = await Promise.all([api(`/api/boards/${id}`), api(`/api/boards/${id}/tasks`)]);
+    state.tasks = await Promise.all(state.tasks.map(task =>
+      api(`/api/tasks/${task.id}`).catch(() => task)
+    ));
     $("boardTitle").textContent = state.board.name;
     $("boardDescription").textContent = state.board.description || `${state.board.columns.length} stage workflow`;
     renderBoard();
@@ -176,7 +199,7 @@ function renderBoard() {
     const tasks = state.tasks.filter(task => task.boardColumnId === column.id);
     return `<section class="kanban-column">
       <div class="column-head"><h3>${escapeHtml(column.name)}</h3><span class="count-pill">${tasks.length}</span></div>
-      ${tasks.map(task => `<button class="task-card" data-task="${task.id}" type="button" aria-label="Edit ${escapeHtml(task.title)}"><span class="priority ${task.priority.toLowerCase()}">${escapeHtml(task.priority)}</span><h4>${escapeHtml(task.title)}</h4><p>${escapeHtml(task.description || "No description")}</p><div class="task-meta">${task.dueDate ? `Due ${new Date(task.dueDate).toLocaleDateString()}` : "No due date"}<span>Edit →</span></div></button>`).join("")}
+      ${tasks.map(task => `<button class="task-card" data-task="${task.id}" type="button" aria-label="Edit ${escapeHtml(task.title)}"><div class="task-badges"><span class="priority ${task.priority.toLowerCase()}">${escapeHtml(task.priority)}</span>${(task.labels || []).map(label => `<span class="task-label" style="--label-color:${safeColor(label.color)}">${escapeHtml(label.name)}</span>`).join("")}</div><h4>${escapeHtml(task.title)}</h4><p>${escapeHtml(task.description || "No description")}</p><div class="task-meta">${task.dueDate ? `Due ${new Date(task.dueDate).toLocaleDateString()}` : "No due date"}<span>Edit →</span></div></button>`).join("")}
     </section>`;
   }).join("");
 }
@@ -189,6 +212,10 @@ function escapeHtml(value = "") {
   return String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]);
 }
 
+function safeColor(value) {
+  return /^#[0-9A-Fa-f]{6}$/.test(value || "") ? value : "#6B7280";
+}
+
 function taskFields(task = {}, includeComments = false) {
   task ??= {};
   const dueDate = task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : "";
@@ -198,6 +225,10 @@ function taskFields(task = {}, includeComments = false) {
     <label class="field">Workflow stage<select name="boardColumnId">${state.board?.columns.map(c => `<option value="${c.id}" ${c.id === task.boardColumnId ? "selected" : ""}>${escapeHtml(c.name)}</option>`).join("") || ""}</select></label>
     <label class="field">Priority<select name="priority">${["Medium", "High", "Urgent", "Low"].map(priority => `<option ${priority === task.priority ? "selected" : ""}>${priority}</option>`).join("")}</select></label>
     <label class="field">Due date<input name="dueDate" type="date" value="${dueDate}" /></label>
+    <fieldset class="label-picker">
+      <legend>Labels</legend>
+      ${state.labels.length ? state.labels.map(label => `<label><input type="checkbox" name="labelIds" value="${label.id}" ${(task.labels || []).some(item => item.id === label.id) ? "checked" : ""} /><span class="label-swatch" style="--label-color:${safeColor(label.color)}"></span>${escapeHtml(label.name)}</label>`).join("") : `<p>No project labels yet. Create labels from the project page first.</p>`}
+    </fieldset>
     ${includeComments ? `
       <section class="comments-section" aria-labelledby="commentsHeading">
         <div class="comments-heading"><div><h3 id="commentsHeading">Comments</h3><p>Share updates and keep the conversation with the work.</p></div><span id="commentCount" class="count-pill">0</span></div>
@@ -213,9 +244,10 @@ function taskFields(task = {}, includeComments = false) {
 }
 
 function openDialog(mode, task = null) {
-  if ((mode === "board" || mode === "task" || mode === "editTask") && !state.project) return toast("Choose a project first.", "error");
+  if ((mode === "board" || mode === "label" || mode === "editLabel" || mode === "task" || mode === "editTask") && !state.project) return toast("Choose a project first.", "error");
   if ((mode === "task" || mode === "editTask") && !state.board) return toast("Choose a board first.", "error");
   state.selectedTask = mode === "editTask" ? task : null;
+  state.selectedLabel = mode === "editLabel" ? task : null;
   state.dialogMode = mode;
   const configs = {
     project: { eyebrow: "Create project", title: "What are you working on?", submit: "Create project", fields: `
@@ -225,6 +257,8 @@ function openDialog(mode, task = null) {
       <label class="field">Board name<input name="name" placeholder="e.g. Product delivery" required autofocus /></label>
       <label class="field">Description<textarea name="description" rows="3" placeholder="How will this board be used?"></textarea></label>
       <label class="field">Starting columns<select name="createDefaultColumns"><option value="true">Todo, In Progress, Done</option><option value="false">Start with an empty board</option></select></label>` },
+    label: { eyebrow: "Create label", title: "Add a project label", submit: "Create label", fields: labelFields() },
+    editLabel: { eyebrow: "Edit label", title: "Update this label", submit: "Save label", fields: labelFields(task) },
     task: { eyebrow: "Create task", title: "Add work to the board", submit: "Add task", fields: taskFields() },
     editTask: { eyebrow: "Edit task", title: "Update this task", submit: "Save changes", fields: taskFields(task, true) }
   };
@@ -235,6 +269,13 @@ function openDialog(mode, task = null) {
   $("dialogFields").innerHTML = config.fields;
   $("entityDialog").showModal();
   if (mode === "editTask") loadComments(task.id);
+}
+
+function labelFields(label = {}) {
+  label ??= {};
+  return `
+    <label class="field">Label name<input name="name" maxlength="100" placeholder="e.g. Bug, Design, Customer request" value="${escapeHtml(label.name || "")}" required autofocus /></label>
+    <label class="field">Color<div class="color-field"><input name="color" type="color" value="${safeColor(label.color)}" /><input name="colorText" pattern="#[0-9A-Fa-f]{6}" value="${safeColor(label.color)}" aria-label="Label hex color" /></div></label>`;
 }
 
 async function loadComments(taskId) {
@@ -286,6 +327,12 @@ async function submitDialog(event) {
   event.preventDefault();
   const formData = new FormData($("entityForm"));
   const values = Object.fromEntries(formData);
+  const selectedLabelIds = formData.getAll("labelIds").map(Number);
+  delete values.labelIds;
+  if (values.colorText) {
+    values.color = values.colorText;
+    delete values.colorText;
+  }
   try {
     if (state.dialogMode === "project") {
       await api("/api/projects", { method: "POST", body: JSON.stringify(values) });
@@ -296,21 +343,55 @@ async function submitDialog(event) {
       await api(`/api/projects/${state.project.id}/boards`, { method: "POST", body: JSON.stringify(values) });
       await openProject(state.project.id);
       toast("Board created.");
+    } else if (state.dialogMode === "label" || state.dialogMode === "editLabel") {
+      const editing = state.dialogMode === "editLabel";
+      await api(editing ? `/api/labels/${state.selectedLabel.id}` : `/api/projects/${state.project.id}/labels`, {
+        method: editing ? "PUT" : "POST",
+        body: JSON.stringify(values)
+      });
+      await openProject(state.project.id);
+      toast(editing ? "Label updated." : "Label created.");
     } else if (state.dialogMode === "task" || state.dialogMode === "editTask") {
       values.boardColumnId = Number(values.boardColumnId);
       values.dueDate = values.dueDate ? new Date(`${values.dueDate}T12:00:00`).toISOString() : null;
       values.status = state.board.columns.find(c => c.id === values.boardColumnId)?.name || "Todo";
+      let savedTask;
       if (state.dialogMode === "editTask") {
         values.assigneeId = state.selectedTask.assigneeId;
         values.position = state.selectedTask.position;
-        await api(`/api/tasks/${state.selectedTask.id}`, { method: "PUT", body: JSON.stringify(values) });
+        savedTask = await api(`/api/tasks/${state.selectedTask.id}`, { method: "PUT", body: JSON.stringify(values) });
       } else {
-        await api(`/api/projects/${state.project.id}/tasks`, { method: "POST", body: JSON.stringify(values) });
+        savedTask = await api(`/api/projects/${state.project.id}/tasks`, { method: "POST", body: JSON.stringify(values) });
       }
+      await syncTaskLabels(savedTask.id, selectedLabelIds, state.selectedTask?.labels || []);
       await openBoard(state.board.id);
+      const refreshed = state.tasks.find(task => task.id === savedTask.id);
+      if (refreshed) refreshed.labels = state.labels.filter(label => selectedLabelIds.includes(label.id));
+      renderBoard();
       toast(state.dialogMode === "editTask" ? "Task updated." : "Task added.");
     }
     $("entityDialog").close();
+  } catch (error) { toast(error.message, "error"); }
+}
+
+async function syncTaskLabels(taskId, selectedIds, existingLabels) {
+  const existingIds = existingLabels.map(label => label.id);
+  const additions = selectedIds.filter(id => !existingIds.includes(id));
+  const removals = existingIds.filter(id => !selectedIds.includes(id));
+  await Promise.all([
+    ...additions.map(labelId => api(`/api/tasks/${taskId}/labels/${labelId}`, { method: "POST" })),
+    ...removals.map(labelId => api(`/api/tasks/${taskId}/labels/${labelId}`, { method: "DELETE" }))
+  ]);
+}
+
+async function deleteLabel(labelId) {
+  const label = state.labels.find(item => item.id === Number(labelId));
+  if (!label || !confirm(`Delete the "${label.name}" label? It will be removed from all tasks.`)) return;
+  try {
+    await api(`/api/labels/${label.id}`, { method: "DELETE" });
+    state.labels = state.labels.filter(item => item.id !== label.id);
+    renderLabels();
+    toast("Label deleted.");
   } catch (error) { toast(error.message, "error"); }
 }
 
@@ -320,20 +401,37 @@ $("logoutButton").addEventListener("click", () => logout());
 $("projectSearch").addEventListener("input", renderProjects);
 $("projectsGrid").addEventListener("click", e => e.target.dataset.project && openProject(e.target.dataset.project));
 $("boardsGrid").addEventListener("click", e => e.target.dataset.board && openBoard(e.target.dataset.board));
+$("labelsGrid").addEventListener("click", event => {
+  const editId = event.target.dataset.editLabel;
+  const deleteId = event.target.dataset.deleteLabel;
+  if (editId) openDialog("editLabel", state.labels.find(label => label.id === Number(editId)));
+  if (deleteId) deleteLabel(deleteId);
+});
 $("kanban").addEventListener("click", e => {
   const card = e.target.closest("[data-task]");
   if (!card) return;
   const task = state.tasks.find(item => item.id === Number(card.dataset.task));
-  if (task) openDialog("editTask", task);
+  if (task) api(`/api/tasks/${task.id}`).then(detail => openDialog("editTask", detail)).catch(error => toast(error.message, "error"));
 });
 $("backToProjects").addEventListener("click", () => showView("projects"));
 $("backToProject").addEventListener("click", () => showView("project"));
 $("newBoardButton").addEventListener("click", () => openDialog("board"));
+$("newLabelButton").addEventListener("click", () => openDialog("label"));
 $("newTaskButton").addEventListener("click", () => openDialog("task"));
 $("primaryAction").addEventListener("click", e => openDialog(e.currentTarget.dataset.action || "project"));
 $("entityForm").addEventListener("submit", submitDialog);
 $("dialogFields").addEventListener("click", event => {
   if (event.target.id === "postCommentButton") postComment();
+});
+$("dialogFields").addEventListener("input", event => {
+  if (event.target.name === "color") {
+    const textInput = $("entityForm").elements.colorText;
+    if (textInput) textInput.value = event.target.value.toUpperCase();
+  }
+  if (event.target.name === "colorText" && /^#[0-9A-Fa-f]{6}$/.test(event.target.value)) {
+    const colorInput = $("entityForm").elements.color;
+    if (colorInput) colorInput.value = event.target.value;
+  }
 });
 $("dialogClose").addEventListener("click", () => $("entityDialog").close());
 $("dialogCancel").addEventListener("click", () => $("entityDialog").close());
