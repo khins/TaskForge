@@ -11,6 +11,7 @@ const state = {
   selectedTask: null,
   selectedLabel: null,
   comments: [],
+  attachments: [],
   authMode: "login",
   dialogMode: null
 };
@@ -18,7 +19,8 @@ const state = {
 const $ = (id) => document.getElementById(id);
 
 async function api(path, options = {}) {
-  const headers = { ...(options.body ? { "Content-Type": "application/json" } : {}), ...options.headers };
+  const isFormData = options.body instanceof FormData;
+  const headers = { ...(options.body && !isFormData ? { "Content-Type": "application/json" } : {}), ...options.headers };
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
   const response = await fetch(`${API}${path}`, { ...options, headers });
   if (response.status === 401) {
@@ -252,6 +254,14 @@ function taskFields(task = {}, includeComments = false) {
       ${state.labels.length ? state.labels.map(label => `<label><input type="checkbox" name="labelIds" value="${label.id}" ${(task.labels || []).some(item => item.id === label.id) ? "checked" : ""} /><span class="label-swatch" style="--label-color:${safeColor(label.color)}"></span>${escapeHtml(label.name)}</label>`).join("") : `<p>No project labels yet. Create labels from the project page first.</p>`}
     </fieldset>
     ${includeComments ? `
+      <section class="attachments-section" aria-labelledby="attachmentsHeading">
+        <div class="comments-heading"><div><h3 id="attachmentsHeading">Attachments</h3><p>Add files, screenshots, and supporting documents up to 10 MB.</p></div><span id="attachmentCount" class="count-pill">0</span></div>
+        <div id="attachmentsList" class="attachments-list"><p class="comments-empty">Loading attachments…</p></div>
+        <div class="attachment-uploader">
+          <input id="attachmentFile" type="file" aria-label="Choose attachment" />
+          <button id="uploadAttachmentButton" class="button secondary compact" type="button">Upload file</button>
+        </div>
+      </section>
       <section class="comments-section" aria-labelledby="commentsHeading">
         <div class="comments-heading"><div><h3 id="commentsHeading">Comments</h3><p>Share updates and keep the conversation with the work.</p></div><span id="commentCount" class="count-pill">0</span></div>
         <div id="commentsList" class="comments-list"><p class="comments-empty">Loading comments…</p></div>
@@ -290,7 +300,10 @@ function openDialog(mode, task = null) {
   $("dialogSubmit").textContent = config.submit;
   $("dialogFields").innerHTML = config.fields;
   $("entityDialog").showModal();
-  if (mode === "editTask") loadComments(task.id);
+  if (mode === "editTask") {
+    loadComments(task.id);
+    loadAttachments(task.id);
+  }
 }
 
 function labelFields(label = {}) {
@@ -343,6 +356,103 @@ async function postComment() {
     toast("Comment posted.");
   } catch (error) { toast(error.message, "error"); }
   finally { button.disabled = false; }
+}
+
+async function loadAttachments(taskId) {
+  try {
+    state.attachments = await api(`/api/tasks/${taskId}/attachments`);
+    renderAttachments();
+  } catch (error) {
+    $("attachmentsList").innerHTML = `<p class="comments-empty error-text">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+function renderAttachments() {
+  const list = $("attachmentsList");
+  if (!list) return;
+  $("attachmentCount").textContent = state.attachments.length;
+  list.innerHTML = state.attachments.length ? state.attachments.map(attachment => `
+    <article class="attachment-item">
+      <div class="file-icon" aria-hidden="true">${fileExtension(attachment.fileName)}</div>
+      <div class="attachment-info">
+        <strong>${escapeHtml(attachment.fileName)}</strong>
+        <small>${formatBytes(attachment.sizeBytes)} · ${escapeHtml(attachment.uploadedByName)} · ${new Date(attachment.createdAt).toLocaleDateString()}</small>
+      </div>
+      <div class="attachment-actions">
+        <button class="text-button" type="button" data-download-attachment="${attachment.id}">Download</button>
+        <button class="text-button danger" type="button" data-delete-attachment="${attachment.id}">Delete</button>
+      </div>
+    </article>`).join("") : `<p class="comments-empty">No attachments yet.</p>`;
+}
+
+function fileExtension(fileName) {
+  const extension = fileName.includes(".") ? fileName.split(".").pop() : "FILE";
+  return escapeHtml(extension.slice(0, 4).toUpperCase());
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function uploadAttachment() {
+  const input = $("attachmentFile");
+  const file = input?.files?.[0];
+  if (!file) return toast("Choose a file to upload.", "error");
+  if (file.size > 10 * 1024 * 1024) return toast("Attachments cannot exceed 10 MB.", "error");
+
+  const button = $("uploadAttachmentButton");
+  button.disabled = true;
+  button.textContent = "Uploading…";
+  const formData = new FormData();
+  formData.append("file", file);
+
+  try {
+    const attachment = await api(`/api/tasks/${state.selectedTask.id}/attachments`, {
+      method: "POST",
+      body: formData
+    });
+    state.attachments.unshift(attachment);
+    input.value = "";
+    renderAttachments();
+    toast("Attachment uploaded.");
+  } catch (error) { toast(error.message, "error"); }
+  finally {
+    button.disabled = false;
+    button.textContent = "Upload file";
+  }
+}
+
+async function downloadAttachment(attachmentId) {
+  const attachment = state.attachments.find(item => item.id === Number(attachmentId));
+  if (!attachment) return;
+  try {
+    const response = await fetch(`${API}/api/attachments/${attachment.id}/download`, {
+      headers: { Authorization: `Bearer ${state.token}` }
+    });
+    if (!response.ok) throw new Error(`Download failed (${response.status})`);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = attachment.fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) { toast(error.message, "error"); }
+}
+
+async function deleteAttachment(attachmentId) {
+  const attachment = state.attachments.find(item => item.id === Number(attachmentId));
+  if (!attachment || !confirm(`Delete "${attachment.fileName}"? This cannot be undone.`)) return;
+  try {
+    await api(`/api/attachments/${attachment.id}`, { method: "DELETE" });
+    state.attachments = state.attachments.filter(item => item.id !== attachment.id);
+    renderAttachments();
+    toast("Attachment deleted.");
+  } catch (error) { toast(error.message, "error"); }
 }
 
 async function submitDialog(event) {
@@ -487,6 +597,9 @@ $("primaryAction").addEventListener("click", e => openDialog(e.currentTarget.dat
 $("entityForm").addEventListener("submit", submitDialog);
 $("dialogFields").addEventListener("click", event => {
   if (event.target.id === "postCommentButton") postComment();
+  if (event.target.id === "uploadAttachmentButton") uploadAttachment();
+  if (event.target.dataset.downloadAttachment) downloadAttachment(event.target.dataset.downloadAttachment);
+  if (event.target.dataset.deleteAttachment) deleteAttachment(event.target.dataset.deleteAttachment);
 });
 $("dialogFields").addEventListener("input", event => {
   if (event.target.name === "color") {

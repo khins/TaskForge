@@ -157,6 +157,18 @@ dialog form { padding: 27px; }
 .dialog-head { display: flex; justify-content: space-between; align-items: start; margin-bottom: 22px; }
 .dialog-head h2 { margin: 0; font: 800 23px "Manrope"; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 26px; }
+.attachments-section { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line); }
+.attachments-list { max-height: 220px; margin: 18px 0; overflow-y: auto; }
+.attachment-item { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 10px 0; border-bottom: 1px solid #edf0ec; }
+.attachment-item:last-child { border-bottom: 0; }
+.file-icon { display: grid; place-items: center; width: 38px; height: 38px; color: var(--green); background: var(--green-pale); border-radius: 8px; font-size: 8px; font-weight: 800; }
+.attachment-info { min-width: 0; }
+.attachment-info strong, .attachment-info small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-info strong { font-size: 11px; }.attachment-info small { margin-top: 3px; color: var(--muted); font-size: 9px; }
+.attachment-actions { display: flex; gap: 9px; }
+.attachment-uploader { display: flex; align-items: center; gap: 10px; padding: 12px; background: #f6f7f4; border: 1px dashed #cbd2cb; border-radius: 8px; }
+.attachment-uploader input { min-width: 0; flex: 1; color: var(--muted); font-size: 10px; }
+.attachment-uploader input::file-selector-button { margin-right: 9px; padding: 7px 9px; color: var(--ink); background: white; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
 .comments-section { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line); }
 .comments-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
 .comments-heading h3 { margin: 0 0 4px; font: 700 16px "Manrope"; }
@@ -195,4 +207,5 @@ dialog form { padding: 27px; }
   .project-card p, .board-card p { min-height: auto; }.board-toolbar { align-items: stretch; flex-direction: column; }
   .board-actions { align-items: stretch; flex-wrap: wrap; }.label-filter { flex: 1 1 100%; }.label-filter select { width: 100%; }
   .project-hero { align-items: stretch; flex-direction: column; }.button.project-delete { align-self: flex-start; }
+  .attachment-item { grid-template-columns: 34px minmax(0, 1fr); }.attachment-actions { grid-column: 2; }.attachment-uploader { align-items: stretch; flex-direction: column; }
 }
