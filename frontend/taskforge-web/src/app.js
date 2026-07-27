@@ -55,7 +55,8 @@ function decodeToken(token) {
     return {
       id: payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"] || payload.nameid || payload.sub || "",
       email: payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"] || payload.email || "",
-      name: payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"] || payload.unique_name || payload.name || ""
+      name: payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"] || payload.unique_name || payload.name || "",
+      role: (payload["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"] || payload.role || "user").toLowerCase()
     };
   } catch { return {}; }
 }
@@ -116,8 +117,13 @@ function showApp() {
 function renderCurrentUser() {
   const displayName = state.user?.fullName || state.user?.name || state.user?.email || "TaskForge User";
   $("userName").textContent = displayName;
-  $("userEmail").textContent = state.user?.email || "";
+  $("userEmail").textContent = `${state.user?.email || ""}${isGlobalAdmin() ? " · Administrator" : ""}`;
   $("userAvatar").textContent = initials(displayName);
+  $("usersNavItem").classList.toggle("hidden", !isGlobalAdmin());
+}
+
+function isGlobalAdmin() {
+  return state.user?.role?.toLowerCase() === "admin";
 }
 
 async function loadCurrentUserProfile() {
@@ -263,15 +269,58 @@ async function openUserDetail(id) {
         <div><dt>Created</dt><dd>${new Date(user.createdAt).toLocaleString()}</dd></div>
         <div><dt>Last updated</dt><dd>${new Date(user.updatedAt).toLocaleString()}</dd></div>
       </dl>
+      <section class="admin-user-editor">
+        <div class="user-assets-heading"><div><h3>Account administration</h3><p>Update this user’s identity, access level, and login status.</p></div></div>
+        <div class="admin-user-fields">
+          <label class="field">Full name<input id="adminUserFullName" value="${escapeHtml(user.fullName || "")}" /></label>
+          <label class="field">Email<input id="adminUserEmail" type="email" value="${escapeHtml(user.email)}" required /></label>
+          <label class="field">Global role<select id="adminUserRole"><option value="user" ${user.role.toLowerCase() === "user" ? "selected" : ""}>User</option><option value="admin" ${user.role.toLowerCase() === "admin" ? "selected" : ""}>Administrator</option></select></label>
+          <label class="field">Login status<select id="adminUserActive"><option value="true" ${user.isActive ? "selected" : ""}>Active</option><option value="false" ${!user.isActive ? "selected" : ""}>Inactive</option></select></label>
+        </div>
+        <button id="saveUserAdminButton" class="button secondary compact" type="button">Save account</button>
+      </section>
       ${renderUserAssets(assets)}`;
     $("userDetailDialog").showModal();
   } catch (error) { toast(error.message, "error"); }
 }
 
+async function saveUserAdministration() {
+  const user = state.selectedUser;
+  if (!user) return;
+  const button = $("saveUserAdminButton");
+  button.disabled = true;
+  button.textContent = "Saving…";
+  try {
+    const updated = await api(`/api/Users/${user.id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        fullName: $("adminUserFullName").value.trim(),
+        email: $("adminUserEmail").value.trim(),
+        role: $("adminUserRole").value,
+        isActive: $("adminUserActive").value === "true"
+      })
+    });
+    state.selectedUser = updated;
+    state.users = state.users.map(item => item.id === updated.id ? updated : item);
+    if (Number(updated.id) === Number(state.user?.id)) {
+      state.user = { ...state.user, ...updated, name: updated.fullName || state.user.name };
+      localStorage.setItem("taskforge_user", JSON.stringify(state.user));
+      renderCurrentUser();
+    }
+    renderUsers();
+    toast("User account updated. Role changes take effect at the next sign-in.");
+    await openUserDetail(updated.id);
+  } catch (error) {
+    toast(error.message, "error");
+    button.disabled = false;
+    button.textContent = "Save account";
+  }
+}
+
 function renderUserAssets(assets) {
   const groups = [
     ["Owned projects", assets.ownedProjects, "project"],
-    ["Project memberships", assets.memberships, "project"],
+    ["Project memberships", assets.memberships, "membership"],
     ["Assigned tasks", assets.assignedTasks, "task"],
     ["Reported tasks", assets.reportedTasks, "task"],
     ["Comments", assets.comments, "task"],
@@ -290,13 +339,30 @@ function renderUserAssets(assets) {
         <h4>${title}<span>${items.length}</span></h4>
         ${items.map(item => type === "project" ? `
           <button type="button" class="user-asset-row" data-asset-project="${item.projectId}">
-            <span><strong>${escapeHtml(item.projectName)}</strong><small>Project</small></span><b>Open →</b>
-          </button>` : `
+            <span><strong>${escapeHtml(item.projectName)}</strong><small>Project ID ${item.projectId}</small></span><b>Open →</b>
+          </button>` : type === "membership" ? `
+          <div class="user-asset-row">
+            <span><strong>${escapeHtml(item.projectName)}</strong><small>Project ID ${item.projectId} · Membership</small></span>
+            <span class="user-asset-actions">
+              <button class="text-button" type="button" data-asset-project="${item.projectId}">Open</button>
+              <button class="text-button danger" type="button" data-remove-membership="${item.projectId}">Remove</button>
+            </span>
+          </div>` : `
           <button type="button" class="user-asset-row" data-asset-task="${item.taskId}" data-asset-project="${item.projectId}" data-asset-board="${item.boardId || ""}">
             <span><strong>${escapeHtml(item.taskTitle)}</strong><small>${escapeHtml(item.projectName)}${item.detail ? ` · ${escapeHtml(item.detail)}` : ""}</small></span><b>Open →</b>
           </button>`).join("")}
       </div>`).join("")}</div>` : `<div class="user-assets-empty">Ready to delete—no assets are assigned to this account.</div>`}
   </section>`;
+}
+
+async function removeSelectedUserMembership(projectId) {
+  const user = state.selectedUser;
+  if (!user || !confirm(`Remove ${user.fullName || user.email} from this project?`)) return;
+  try {
+    await api(`/api/projects/${projectId}/members/${user.id}`, { method: "DELETE" });
+    toast("Project membership removed.");
+    await openUserDetail(user.id);
+  } catch (error) { toast(error.message, "error"); }
 }
 
 async function deleteSelectedUser() {
@@ -882,8 +948,17 @@ $("userDetailClose").addEventListener("click", () => $("userDetailDialog").close
 $("userDetailDone").addEventListener("click", () => $("userDetailDialog").close());
 $("deleteUserButton").addEventListener("click", deleteSelectedUser);
 $("userDetailContent").addEventListener("click", event => {
-  const projectButton = event.target.closest("[data-asset-project]:not([data-asset-task])");
+  const projectButton = event.target.closest("[data-asset-project]");
   const taskButton = event.target.closest("[data-asset-task]");
+  const membershipButton = event.target.closest("[data-remove-membership]");
+  if (event.target.id === "saveUserAdminButton") {
+    saveUserAdministration();
+    return;
+  }
+  if (membershipButton) {
+    removeSelectedUserMembership(membershipButton.dataset.removeMembership);
+    return;
+  }
   if (projectButton) {
     $("userDetailDialog").close();
     openProject(projectButton.dataset.assetProject);

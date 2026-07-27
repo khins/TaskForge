@@ -221,6 +221,12 @@ public class ProjectMembersController : ControllerBase
 
     private async Task<ProjectAccess?> GetProjectAccess(long projectId, long userId)
     {
+        if (User.IsInRole("admin"))
+        {
+            return await _context.Projects.AnyAsync(p => p.Id == projectId)
+                ? new ProjectAccess(true, "admin")
+                : null;
+        }
         return await _context.Projects
             .AsNoTracking()
             .Where(p => p.Id == projectId)

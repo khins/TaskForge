@@ -28,9 +28,10 @@ public class ProjectsController : ControllerBase
             return Unauthorized();
         }
 
+        var isGlobalAdmin = User.IsInRole("admin");
         var projects = await _context.Projects
             .AsNoTracking()
-            .Where(p => p.OwnerId == currentUserId.Value || p.Members.Any(m => m.UserId == currentUserId.Value))
+            .Where(p => isGlobalAdmin || p.OwnerId == currentUserId.Value || p.Members.Any(m => m.UserId == currentUserId.Value))
             .OrderByDescending(p => p.CreatedAt)
             .Select(p => new ProjectSummaryResponse(
                 p.Id,
@@ -56,10 +57,11 @@ public class ProjectsController : ControllerBase
             return Unauthorized();
         }
 
+        var isGlobalAdmin = User.IsInRole("admin");
         var project = await _context.Projects
             .AsNoTracking()
             .Where(p => p.Id == id)
-            .Where(p => p.OwnerId == currentUserId.Value || p.Members.Any(m => m.UserId == currentUserId.Value))
+            .Where(p => isGlobalAdmin || p.OwnerId == currentUserId.Value || p.Members.Any(m => m.UserId == currentUserId.Value))
             .Select(p => new ProjectDetailResponse(
                 p.Id,
                 p.Name,
@@ -172,7 +174,7 @@ public class ProjectsController : ControllerBase
             return NotFound(new { Message = "Project not found." });
         }
 
-        if (project.OwnerId != currentUserId.Value)
+        if (project.OwnerId != currentUserId.Value && !User.IsInRole("admin"))
         {
             return Forbid();
         }
@@ -210,7 +212,7 @@ public class ProjectsController : ControllerBase
             return NotFound(new { Message = "Project not found." });
         }
 
-        if (project.OwnerId != currentUserId.Value)
+        if (project.OwnerId != currentUserId.Value && !User.IsInRole("admin"))
         {
             return Forbid();
         }

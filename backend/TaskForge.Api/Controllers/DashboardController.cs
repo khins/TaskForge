@@ -29,14 +29,17 @@ public class DashboardController : ControllerBase
 
         var now = DateTime.UtcNow;
         var dueSoonCutoff = now.AddDays(7);
+        var isGlobalAdmin = User.IsInRole("admin");
         var accessibleProjects = _context.Projects
             .AsNoTracking()
             .Where(p =>
+                isGlobalAdmin ||
                 p.OwnerId == currentUserId.Value ||
                 p.Members.Any(m => m.UserId == currentUserId.Value));
         var accessibleTasks = _context.Tasks
             .AsNoTracking()
             .Where(t =>
+                isGlobalAdmin ||
                 t.Project.OwnerId == currentUserId.Value ||
                 t.Project.Members.Any(m => m.UserId == currentUserId.Value));
 

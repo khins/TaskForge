@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using TaskForge.Api.Data;
 using TaskForge.Api.Models;
 
@@ -18,7 +19,7 @@ public class UsersController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize]
+    [Authorize(Roles = "admin")]
     public async Task<IActionResult> GetUsers()
     {
         var users = await _context.Users
@@ -33,6 +34,10 @@ public class UsersController : ControllerBase
     [Authorize]
     public async Task<IActionResult> GetUser(long id)
     {
+        if (!User.IsInRole("admin") && GetCurrentUserId() != id)
+        {
+            return Forbid();
+        }
         var user = await _context.Users
             .AsNoTracking()
             .Where(u => u.Id == id)
@@ -43,7 +48,7 @@ public class UsersController : ControllerBase
     }
 
     [HttpGet("{id:long}/assets")]
-    [Authorize]
+    [Authorize(Roles = "admin")]
     public async Task<IActionResult> GetUserAssets(long id)
     {
         if (!await _context.Users.AnyAsync(u => u.Id == id))
@@ -108,7 +113,7 @@ public class UsersController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize]
+    [Authorize(Roles = "admin")]
     public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Email))
@@ -122,6 +127,11 @@ public class UsersController : ControllerBase
         }
 
         var email = request.Email.Trim();
+        var role = string.IsNullOrWhiteSpace(request.Role) ? "user" : request.Role.Trim().ToLowerInvariant();
+        if (role is not ("user" or "admin"))
+        {
+            return BadRequest(new { Message = "Role must be user or admin." });
+        }
         var exists = await _context.Users.AnyAsync(u => u.Email == email);
         if (exists)
         {
@@ -134,7 +144,7 @@ public class UsersController : ControllerBase
             Email = email,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             FullName = string.IsNullOrWhiteSpace(request.FullName) ? null : request.FullName.Trim(),
-            Role = string.IsNullOrWhiteSpace(request.Role) ? "user" : request.Role.Trim(),
+            Role = role,
             IsActive = request.IsActive ?? true,
             CreatedAt = now,
             UpdatedAt = now
@@ -147,8 +157,45 @@ public class UsersController : ControllerBase
         return CreatedAtAction(nameof(GetUser), new { id = user.Id }, response);
     }
 
+    [HttpPut("{id:long}")]
+    [Authorize(Roles = "admin")]
+    public async Task<IActionResult> UpdateUser(long id, [FromBody] UpdateUserRequest request)
+    {
+        var user = await _context.Users.SingleOrDefaultAsync(u => u.Id == id);
+        if (user is null)
+        {
+            return NotFound();
+        }
+
+        var email = request.Email?.Trim();
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return BadRequest(new { Message = "Email is required." });
+        }
+
+        var role = request.Role?.Trim().ToLowerInvariant();
+        if (role is not ("user" or "admin"))
+        {
+            return BadRequest(new { Message = "Role must be user or admin." });
+        }
+
+        if (await _context.Users.AnyAsync(u => u.Id != id && u.Email == email))
+        {
+            return Conflict(new { Message = "Email already exists." });
+        }
+
+        user.Email = email;
+        user.FullName = string.IsNullOrWhiteSpace(request.FullName) ? null : request.FullName.Trim();
+        user.Role = role;
+        user.IsActive = request.IsActive;
+        user.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        return Ok(new UserResponse(user.Id, user.Email, user.FullName, user.Role, user.IsActive, user.CreatedAt, user.UpdatedAt));
+    }
+
     [HttpDelete("{id:long}")]
-    [Authorize]
+    [Authorize(Roles = "admin")]
     public async Task<IActionResult> DeleteUser(long id)
     {
         var user = await _context.Users.SingleOrDefaultAsync(u => u.Id == id);
@@ -211,6 +258,12 @@ public class UsersController : ControllerBase
                 null))
             .ToListAsync();
     }
+
+    private long? GetCurrentUserId()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return long.TryParse(userId, out var id) ? id : null;
+    }
 }
 
 public class CreateUserRequest
@@ -220,6 +273,14 @@ public class CreateUserRequest
     public string? FullName { get; set; }
     public string? Role { get; set; }
     public bool? IsActive { get; set; }
+}
+
+public class UpdateUserRequest
+{
+    public string Email { get; set; } = null!;
+    public string? FullName { get; set; }
+    public string Role { get; set; } = "user";
+    public bool IsActive { get; set; } = true;
 }
 
 public record UserResponse(

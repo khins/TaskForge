@@ -26,7 +26,7 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         var user = await _context.Users.SingleOrDefaultAsync(u => u.Email == request.Email);
-        if (user is null)
+        if (user is null || !user.IsActive)
             return Unauthorized();
 
         if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
@@ -42,7 +42,7 @@ public class AuthController : ControllerBase
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Email, user.Email),
                 new Claim(ClaimTypes.Name, user.FullName ?? string.Empty),
-                new Claim(ClaimTypes.Role, user.Role),
+                new Claim(ClaimTypes.Role, user.Role.ToLowerInvariant()),
             }),
             Expires = DateTime.UtcNow.AddMinutes(jwtSettings.GetValue<int>("ExpiresMinutes")),
             Issuer = jwtSettings.GetValue<string>("Issuer"),

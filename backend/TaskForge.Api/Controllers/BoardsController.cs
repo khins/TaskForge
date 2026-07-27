@@ -216,6 +216,7 @@ public class BoardsController : ControllerBase
 
     private async Task<bool> CanViewProject(long projectId, long userId)
     {
+        if (User.IsInRole("admin")) return await _context.Projects.AnyAsync(p => p.Id == projectId);
         return await _context.Projects.AnyAsync(p =>
             p.Id == projectId &&
             (p.OwnerId == userId || p.Members.Any(m => m.UserId == userId)));
@@ -223,6 +224,7 @@ public class BoardsController : ControllerBase
 
     private async Task<bool> CanManageProject(long projectId, long userId)
     {
+        if (User.IsInRole("admin")) return await _context.Projects.AnyAsync(p => p.Id == projectId);
         return await _context.Projects.AnyAsync(p =>
             p.Id == projectId &&
             (p.OwnerId == userId || p.Members.Any(m =>
