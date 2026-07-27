@@ -54,8 +54,8 @@ function decodeToken(token) {
     const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
     return {
       id: payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"] || payload.nameid || payload.sub || "",
-      email: payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"] || "",
-      name: payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"] || ""
+      email: payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"] || payload.email || "",
+      name: payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"] || payload.unique_name || payload.name || ""
     };
   } catch { return {}; }
 }
@@ -108,10 +108,28 @@ async function handleAuth(event) {
 function showApp() {
   $("authView").classList.add("hidden");
   $("appView").classList.remove("hidden");
-  $("userName").textContent = state.user?.name || "TaskForge User";
-  $("userEmail").textContent = state.user?.email || "";
-  $("userAvatar").textContent = initials(state.user?.name || state.user?.email);
+  renderCurrentUser();
   showView("dashboard");
+  loadCurrentUserProfile();
+}
+
+function renderCurrentUser() {
+  const displayName = state.user?.fullName || state.user?.name || state.user?.email || "TaskForge User";
+  $("userName").textContent = displayName;
+  $("userEmail").textContent = state.user?.email || "";
+  $("userAvatar").textContent = initials(displayName);
+}
+
+async function loadCurrentUserProfile() {
+  if (!state.user?.id) return;
+  try {
+    const profile = await api(`/api/Users/${state.user.id}`);
+    state.user = { ...state.user, ...profile, name: profile.fullName || state.user.name };
+    localStorage.setItem("taskforge_user", JSON.stringify(state.user));
+    renderCurrentUser();
+  } catch {
+    // Keep the token-provided identity when the profile cannot be refreshed.
+  }
 }
 
 function logout(showMessage = true) {
