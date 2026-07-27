@@ -3,6 +3,8 @@ const state = {
   token: localStorage.getItem("taskforge_token"),
   user: JSON.parse(localStorage.getItem("taskforge_user") || "null"),
   projects: [],
+  dashboard: null,
+  currentView: "dashboard",
   project: null,
   board: null,
   tasks: [],
@@ -95,7 +97,7 @@ async function handleAuth(event) {
     localStorage.setItem("taskforge_token", state.token);
     localStorage.setItem("taskforge_user", JSON.stringify(state.user));
     showApp();
-    await loadProjects();
+    await Promise.all([loadDashboard(), loadProjects()]);
   } catch (error) { toast(error.message, "error"); }
   finally { button.disabled = false; }
 }
@@ -106,7 +108,7 @@ function showApp() {
   $("userName").textContent = state.user?.name || "TaskForge User";
   $("userEmail").textContent = state.user?.email || "";
   $("userAvatar").textContent = initials(state.user?.name || state.user?.email);
-  showView("projects");
+  showView("dashboard");
 }
 
 function logout(showMessage = true) {
@@ -120,13 +122,58 @@ function logout(showMessage = true) {
 }
 
 function showView(view) {
-  ["projects", "project", "board"].forEach(name => $(`${name}View`).classList.toggle("hidden", name !== view));
+  state.currentView = view;
+  ["dashboard", "projects", "project", "board"].forEach(name => $(`${name}View`).classList.toggle("hidden", name !== view));
   document.querySelectorAll(".nav-item[data-view]").forEach(el => el.classList.toggle("active", el.dataset.view === view || (view === "project" && el.dataset.view === "projects")));
-  const titles = { projects: ["Workspace", "Projects", "+ New project"], project: ["Project", state.project?.name || "Project", "+ New board"], board: ["Board", state.board?.name || "Board", "+ Add task"] };
+  const titles = { dashboard: ["Overview", "Dashboard", ""], projects: ["Workspace", "Projects", "+ New project"], project: ["Project", state.project?.name || "Project", "+ New board"], board: ["Board", state.board?.name || "Board", "+ Add task"] };
   $("pageEyebrow").textContent = titles[view][0];
   $("pageTitle").textContent = titles[view][1];
   $("primaryAction").textContent = titles[view][2];
+  $("primaryAction").classList.toggle("hidden", view === "dashboard");
   $("primaryAction").dataset.action = view === "projects" ? "project" : view === "project" ? "board" : "task";
+}
+
+async function loadDashboard() {
+  try {
+    state.dashboard = await api("/api/Dashboard");
+    renderDashboard();
+  } catch (error) { toast(error.message, "error"); }
+}
+
+function renderDashboard() {
+  const dashboard = state.dashboard;
+  $("dashboardProjectCount").textContent = dashboard.projectCount;
+  $("dashboardTaskCount").textContent = dashboard.taskCount;
+  $("dashboardAssignedCount").textContent = dashboard.assignedToMeCount;
+  $("dashboardOverdueCount").textContent = dashboard.overdueCount;
+  $("dashboardDueSoonCount").textContent = dashboard.dueSoonCount;
+  renderBreakdown("statusBreakdown", dashboard.tasksByStatus, dashboard.taskCount);
+  renderBreakdown("priorityBreakdown", dashboard.tasksByPriority, dashboard.taskCount);
+  renderDashboardTasks("recentTasks", dashboard.recentTasks, "No tasks have been updated yet.");
+  renderDashboardTasks("overdueTasks", dashboard.overdueTasks, "You’re all caught up—nothing is overdue.");
+  $("recentTaskCount").textContent = dashboard.recentTasks.length;
+  $("overdueTaskCount").textContent = dashboard.overdueTasks.length;
+}
+
+function renderBreakdown(elementId, groups, total) {
+  $(elementId).innerHTML = groups.length ? groups.map((group, index) => {
+    const percent = total ? Math.round((group.count / total) * 100) : 0;
+    return `<div class="breakdown-row">
+      <div class="breakdown-label"><span><i class="breakdown-dot color-${index % 5}"></i>${escapeHtml(group.name)}</span><strong>${group.count}</strong></div>
+      <div class="breakdown-track"><span class="color-${index % 5}" style="width:${percent}%"></span></div>
+    </div>`;
+  }).join("") : `<p class="dashboard-empty">No task data yet.</p>`;
+}
+
+function renderDashboardTasks(elementId, tasks, emptyMessage) {
+  $(elementId).innerHTML = tasks.length ? tasks.map(task => `
+    <button class="dashboard-task-row" type="button" data-dashboard-project="${task.projectId}">
+      <span class="priority ${escapeHtml(task.priority.toLowerCase())}">${escapeHtml(task.priority)}</span>
+      <span class="dashboard-task-main"><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(task.projectName)} · Updated ${new Date(task.updatedAt).toLocaleDateString()}</small></span>
+      <span class="status-chip">${escapeHtml(task.status)}</span>
+      <span class="dashboard-due ${task.dueDate && new Date(task.dueDate) < new Date() && task.status !== "Done" ? "late" : ""}">${task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No due date"}</span>
+      <span aria-hidden="true">→</span>
+    </button>`).join("") : `<p class="dashboard-empty">${emptyMessage}</p>`;
 }
 
 async function loadProjects() {
@@ -562,6 +609,10 @@ $("authForm").addEventListener("submit", handleAuth);
 $("authToggle").addEventListener("click", () => setAuthMode(state.authMode === "login" ? "register" : "login"));
 $("logoutButton").addEventListener("click", () => logout());
 $("projectSearch").addEventListener("input", renderProjects);
+$("dashboardView").addEventListener("click", event => {
+  const row = event.target.closest("[data-dashboard-project]");
+  if (row) openProject(row.dataset.dashboardProject);
+});
 $("projectsGrid").addEventListener("click", e => e.target.dataset.project && openProject(e.target.dataset.project));
 $("projectHero").addEventListener("click", event => {
   if (event.target.id === "deleteProjectButton") deleteCurrentProject();
@@ -613,12 +664,18 @@ $("dialogFields").addEventListener("input", event => {
 });
 $("dialogClose").addEventListener("click", () => $("entityDialog").close());
 $("dialogCancel").addEventListener("click", () => $("entityDialog").close());
-$("refreshButton").addEventListener("click", () => state.board ? openBoard(state.board.id) : state.project ? openProject(state.project.id) : loadProjects());
+$("refreshButton").addEventListener("click", () => {
+  if (state.currentView === "dashboard") return loadDashboard();
+  if (state.currentView === "board" && state.board) return openBoard(state.board.id);
+  if (state.currentView === "project" && state.project) return openProject(state.project.id);
+  return loadProjects();
+});
 $("menuButton").addEventListener("click", () => document.querySelector(".sidebar").classList.toggle("open"));
 document.querySelectorAll(".nav-item[data-view]").forEach(el => el.addEventListener("click", () => {
   const view = el.dataset.view;
   if (view === "board" && !state.board) return toast("Open a board from a project first.");
   showView(view);
+  if (view === "dashboard") loadDashboard();
 }));
 
 checkApi();
@@ -626,5 +683,5 @@ if (state.token) {
   state.user = { ...(state.user || {}), ...decodeToken(state.token) };
   localStorage.setItem("taskforge_user", JSON.stringify(state.user));
   showApp();
-  loadProjects();
+  Promise.all([loadDashboard(), loadProjects()]);
 }

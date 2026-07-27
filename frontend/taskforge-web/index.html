@@ -55,7 +55,8 @@
       <aside class="sidebar">
         <div class="brand"><span class="brand-mark">TF</span> TaskForge</div>
         <nav aria-label="Main navigation">
-          <button class="nav-item active" data-view="projects"><span>⌂</span> Projects</button>
+          <button class="nav-item active" data-view="dashboard"><span>⌂</span> Dashboard</button>
+          <button class="nav-item" data-view="projects"><span>◆</span> Projects</button>
           <button class="nav-item" data-view="board"><span>▦</span> Current board</button>
         </nav>
         <div class="sidebar-bottom">
@@ -80,7 +81,35 @@
           </div>
         </header>
 
-        <section id="projectsView" class="content">
+        <section id="dashboardView" class="content">
+          <div id="dashboardMetrics" class="dashboard-metrics">
+            <article><span class="metric-icon lavender">◆</span><div><small>Projects</small><strong id="dashboardProjectCount">—</strong></div></article>
+            <article><span class="metric-icon mint">✓</span><div><small>Total tasks</small><strong id="dashboardTaskCount">—</strong></div></article>
+            <article><span class="metric-icon blue">♙</span><div><small>Assigned to me</small><strong id="dashboardAssignedCount">—</strong></div></article>
+            <article><span class="metric-icon red">!</span><div><small>Overdue</small><strong id="dashboardOverdueCount">—</strong></div></article>
+            <article><span class="metric-icon peach">◷</span><div><small>Due this week</small><strong id="dashboardDueSoonCount">—</strong></div></article>
+          </div>
+          <div class="dashboard-grid">
+            <article class="dashboard-panel">
+              <div class="panel-heading"><div><h2>Work by status</h2><p>How tasks are moving through your workflow.</p></div></div>
+              <div id="statusBreakdown" class="breakdown-list"></div>
+            </article>
+            <article class="dashboard-panel">
+              <div class="panel-heading"><div><h2>Priority mix</h2><p>Where the most important work is concentrated.</p></div></div>
+              <div id="priorityBreakdown" class="breakdown-list"></div>
+            </article>
+            <article class="dashboard-panel dashboard-wide">
+              <div class="panel-heading"><div><h2>Recently updated</h2><p>The latest work across your projects.</p></div><span id="recentTaskCount" class="count-pill">0</span></div>
+              <div id="recentTasks" class="dashboard-task-list"></div>
+            </article>
+            <article class="dashboard-panel dashboard-wide overdue-panel">
+              <div class="panel-heading"><div><h2>Needs attention</h2><p>Overdue tasks that are not marked Done.</p></div><span id="overdueTaskCount" class="count-pill">0</span></div>
+              <div id="overdueTasks" class="dashboard-task-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="projectsView" class="content hidden">
           <div class="summary-grid">
             <article><span class="metric-icon lavender">◆</span><div><small>Active projects</small><strong id="projectCount">0</strong></div></article>
             <article><span class="metric-icon mint">▦</span><div><small>Total boards</small><strong id="boardCount">0</strong></div></article>
@@ -136,6 +165,6 @@
       </form>
     </dialog>
 
-    <script src="src/app.js?v=9"></script>
+    <script src="src/app.js?v=10"></script>
   </body>
 </html>
