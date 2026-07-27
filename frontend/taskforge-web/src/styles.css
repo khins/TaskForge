@@ -231,7 +231,12 @@ dialog form { padding: 27px; }
 .comment-meta { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; font-size: 10px; }
 .comment-meta strong { color: var(--ink); font-size: 12px; }
 .comment-meta time, .comment-meta span { color: #8a948f; }
+.comment-edit-link { margin-left: auto; font-size: 10px; }
 .comment-content p { margin: 6px 0 0; color: #46545a; font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+.comment-editor { margin-top: 9px; }
+.comment-editor textarea { width: 100%; padding: 10px 11px; color: var(--ink); background: #fbfbf9; border: 1px solid #b8c7bf; border-radius: 8px; outline: none; resize: vertical; font: inherit; font-size: 12px; line-height: 1.5; }
+.comment-editor textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(23,107,91,.1); }
+.comment-editor-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 8px; }
 .comment-composer { display: grid; grid-template-columns: 34px 1fr; gap: 11px; }
 .comment-composer textarea { width: 100%; padding: 11px 12px; color: var(--ink); background: #fbfbf9; border: 1px solid #d7dcd7; border-radius: 8px; outline: none; resize: vertical; }
 .comment-composer textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(23,107,91,.1); }

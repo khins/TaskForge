@@ -15,6 +15,7 @@ const state = {
   selectedTask: null,
   selectedLabel: null,
   comments: [],
+  editingCommentId: null,
   attachments: [],
   authMode: "login",
   dialogMode: null
@@ -465,6 +466,7 @@ function labelFields(label = {}) {
 
 async function loadComments(taskId) {
   try {
+    state.editingCommentId = null;
     state.comments = await api(`/api/tasks/${taskId}/comments`);
     renderComments();
   } catch (error) {
@@ -479,14 +481,57 @@ function renderComments() {
   list.innerHTML = state.comments.length ? state.comments.map(comment => {
     const created = new Date(comment.createdAt);
     const edited = new Date(comment.updatedAt).getTime() - created.getTime() > 1000;
+    const canEdit = Number(comment.authorId) === Number(state.user?.id);
+    const isEditing = Number(state.editingCommentId) === Number(comment.id);
     return `<article class="comment">
       <div class="avatar">${initials(comment.authorName)}</div>
       <div class="comment-content">
-        <div class="comment-meta"><strong>${escapeHtml(comment.authorName)}</strong><time datetime="${comment.createdAt}">${created.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</time>${edited ? "<span>edited</span>" : ""}</div>
-        <p>${escapeHtml(comment.body).replace(/\n/g, "<br>")}</p>
+        <div class="comment-meta"><strong>${escapeHtml(comment.authorName)}</strong><time datetime="${comment.createdAt}">${created.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</time>${edited ? "<span>edited</span>" : ""}${canEdit && !isEditing ? `<button class="text-button comment-edit-link" type="button" data-edit-comment="${comment.id}">Edit</button>` : ""}</div>
+        ${isEditing ? `
+          <div class="comment-editor">
+            <textarea data-comment-editor="${comment.id}" rows="4" maxlength="4000" aria-label="Edit comment">${escapeHtml(comment.body)}</textarea>
+            <div class="comment-editor-actions">
+              <button class="text-button" type="button" data-cancel-comment="${comment.id}">Cancel</button>
+              <button class="button primary compact" type="button" data-save-comment="${comment.id}">Save comment</button>
+            </div>
+          </div>` : `<p>${escapeHtml(comment.body).replace(/\n/g, "<br>")}</p>`}
       </div>
     </article>`;
   }).join("") : `<p class="comments-empty">No comments yet. Start the conversation.</p>`;
+}
+
+function beginCommentEdit(commentId) {
+  state.editingCommentId = Number(commentId);
+  renderComments();
+  document.querySelector(`[data-comment-editor="${commentId}"]`)?.focus();
+}
+
+function cancelCommentEdit() {
+  state.editingCommentId = null;
+  renderComments();
+}
+
+async function saveCommentEdit(commentId) {
+  const editor = document.querySelector(`[data-comment-editor="${commentId}"]`);
+  const body = editor?.value.trim();
+  if (!body) return toast("Comment body cannot be empty.", "error");
+  const button = document.querySelector(`[data-save-comment="${commentId}"]`);
+  button.disabled = true;
+  button.textContent = "Saving…";
+  try {
+    const updated = await api(`/api/comments/${commentId}`, {
+      method: "PUT",
+      body: JSON.stringify({ body })
+    });
+    state.comments = state.comments.map(comment => Number(comment.id) === Number(commentId) ? updated : comment);
+    state.editingCommentId = null;
+    renderComments();
+    toast("Comment updated.");
+  } catch (error) {
+    toast(error.message, "error");
+    button.disabled = false;
+    button.textContent = "Save comment";
+  }
 }
 
 async function postComment() {
@@ -761,6 +806,9 @@ $("primaryAction").addEventListener("click", e => openDialog(e.currentTarget.dat
 $("entityForm").addEventListener("submit", submitDialog);
 $("dialogFields").addEventListener("click", event => {
   if (event.target.id === "postCommentButton") postComment();
+  if (event.target.dataset.editComment) beginCommentEdit(event.target.dataset.editComment);
+  if (event.target.dataset.cancelComment) cancelCommentEdit();
+  if (event.target.dataset.saveComment) saveCommentEdit(event.target.dataset.saveComment);
   if (event.target.id === "uploadAttachmentButton") uploadAttachment();
   if (event.target.dataset.downloadAttachment) downloadAttachment(event.target.dataset.downloadAttachment);
   if (event.target.dataset.deleteAttachment) deleteAttachment(event.target.dataset.deleteAttachment);
