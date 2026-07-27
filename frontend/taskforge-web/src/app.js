@@ -246,7 +246,10 @@ function renderUsers() {
 
 async function openUserDetail(id) {
   try {
-    const user = await api(`/api/Users/${id}`);
+    const [user, assets] = await Promise.all([
+      api(`/api/Users/${id}`),
+      api(`/api/Users/${id}/assets`)
+    ]);
     state.selectedUser = user;
     $("userDetailTitle").textContent = user.fullName || "Unnamed user";
     $("userDetailContent").innerHTML = `
@@ -259,9 +262,41 @@ async function openUserDetail(id) {
         <div><dt>Status</dt><dd>${user.isActive ? "Active" : "Inactive"}</dd></div>
         <div><dt>Created</dt><dd>${new Date(user.createdAt).toLocaleString()}</dd></div>
         <div><dt>Last updated</dt><dd>${new Date(user.updatedAt).toLocaleString()}</dd></div>
-      </dl>`;
+      </dl>
+      ${renderUserAssets(assets)}`;
     $("userDetailDialog").showModal();
   } catch (error) { toast(error.message, "error"); }
+}
+
+function renderUserAssets(assets) {
+  const groups = [
+    ["Owned projects", assets.ownedProjects, "project"],
+    ["Project memberships", assets.memberships, "project"],
+    ["Assigned tasks", assets.assignedTasks, "task"],
+    ["Reported tasks", assets.reportedTasks, "task"],
+    ["Comments", assets.comments, "task"],
+    ["Status changes", assets.statusChanges, "task"],
+    ["Attachments", assets.attachments, "task"]
+  ].filter(([, items]) => items.length);
+  const total = groups.reduce((sum, [, items]) => sum + items.length, 0);
+
+  return `<section class="user-assets">
+    <div class="user-assets-heading">
+      <div><h3>Assigned assets</h3><p>${total ? "Remove or reassign these records before deleting this user." : "This user has no blocking TaskForge assets."}</p></div>
+      <span class="count-pill">${total}</span>
+    </div>
+    ${groups.length ? `<div class="user-asset-groups">${groups.map(([title, items, type]) => `
+      <div class="user-asset-group">
+        <h4>${title}<span>${items.length}</span></h4>
+        ${items.map(item => type === "project" ? `
+          <button type="button" class="user-asset-row" data-asset-project="${item.projectId}">
+            <span><strong>${escapeHtml(item.projectName)}</strong><small>Project</small></span><b>Open →</b>
+          </button>` : `
+          <button type="button" class="user-asset-row" data-asset-task="${item.taskId}" data-asset-project="${item.projectId}" data-asset-board="${item.boardId || ""}">
+            <span><strong>${escapeHtml(item.taskTitle)}</strong><small>${escapeHtml(item.projectName)}${item.detail ? ` · ${escapeHtml(item.detail)}` : ""}</small></span><b>Open →</b>
+          </button>`).join("")}
+      </div>`).join("")}</div>` : `<div class="user-assets-empty">Ready to delete—no assets are assigned to this account.</div>`}
+  </section>`;
 }
 
 async function deleteSelectedUser() {
@@ -846,6 +881,18 @@ $("dialogCancel").addEventListener("click", () => $("entityDialog").close());
 $("userDetailClose").addEventListener("click", () => $("userDetailDialog").close());
 $("userDetailDone").addEventListener("click", () => $("userDetailDialog").close());
 $("deleteUserButton").addEventListener("click", deleteSelectedUser);
+$("userDetailContent").addEventListener("click", event => {
+  const projectButton = event.target.closest("[data-asset-project]:not([data-asset-task])");
+  const taskButton = event.target.closest("[data-asset-task]");
+  if (projectButton) {
+    $("userDetailDialog").close();
+    openProject(projectButton.dataset.assetProject);
+  }
+  if (taskButton) {
+    $("userDetailDialog").close();
+    openDashboardTask(taskButton.dataset.assetTask, taskButton.dataset.assetProject, taskButton.dataset.assetBoard);
+  }
+});
 $("refreshButton").addEventListener("click", () => {
   if (state.currentView === "dashboard") return loadDashboard();
   if (state.currentView === "users") return loadUsers();

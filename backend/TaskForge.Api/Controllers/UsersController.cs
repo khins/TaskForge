@@ -42,6 +42,71 @@ public class UsersController : ControllerBase
         return user is null ? NotFound() : Ok(user);
     }
 
+    [HttpGet("{id:long}/assets")]
+    [Authorize]
+    public async Task<IActionResult> GetUserAssets(long id)
+    {
+        if (!await _context.Users.AnyAsync(u => u.Id == id))
+        {
+            return NotFound();
+        }
+
+        var ownedProjects = await _context.Projects
+            .AsNoTracking()
+            .Where(p => p.OwnerId == id)
+            .Select(p => new UserProjectAsset(p.Id, p.Name))
+            .ToListAsync();
+        var memberships = await _context.ProjectMembers
+            .AsNoTracking()
+            .Where(m => m.UserId == id)
+            .Select(m => new UserProjectAsset(m.ProjectId, m.Project.Name))
+            .ToListAsync();
+        var assignedTasks = await GetTaskAssets(_context.Tasks.Where(t => t.AssigneeId == id));
+        var reportedTasks = await GetTaskAssets(_context.Tasks.Where(t => t.ReporterId == id));
+        var comments = await _context.TaskComments
+            .AsNoTracking()
+            .Where(c => c.AuthorId == id)
+            .Select(c => new UserTaskAsset(
+                c.TaskId,
+                c.Task.ProjectId,
+                c.Task.BoardColumn != null ? c.Task.BoardColumn.BoardId : null,
+                c.Task.Project.Name,
+                c.Task.Title,
+                c.Body))
+            .ToListAsync();
+        var statusChanges = await _context.TaskStatusHistory
+            .AsNoTracking()
+            .Where(h => h.ChangedById == id)
+            .Select(h => new UserTaskAsset(
+                h.TaskId,
+                h.Task.ProjectId,
+                h.Task.BoardColumn != null ? h.Task.BoardColumn.BoardId : null,
+                h.Task.Project.Name,
+                h.Task.Title,
+                $"Changed status to {h.ToStatus}"))
+            .ToListAsync();
+        var attachments = await _context.Attachments
+            .AsNoTracking()
+            .Where(a => a.UploadedById == id)
+            .Select(a => new UserTaskAsset(
+                a.TaskId,
+                a.Task.ProjectId,
+                a.Task.BoardColumn != null ? a.Task.BoardColumn.BoardId : null,
+                a.Task.Project.Name,
+                a.Task.Title,
+                a.FileName))
+            .ToListAsync();
+
+        return Ok(new UserAssetsResponse(
+            ownedProjects,
+            memberships,
+            assignedTasks,
+            reportedTasks,
+            comments,
+            statusChanges,
+            attachments));
+    }
+
     [HttpPost]
     [Authorize]
     public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest request)
@@ -132,6 +197,20 @@ public class UsersController : ControllerBase
 
         return NoContent();
     }
+
+    private async Task<List<UserTaskAsset>> GetTaskAssets(IQueryable<TaskItem> tasks)
+    {
+        return await tasks
+            .AsNoTracking()
+            .Select(t => new UserTaskAsset(
+                t.Id,
+                t.ProjectId,
+                t.BoardColumn != null ? t.BoardColumn.BoardId : null,
+                t.Project.Name,
+                t.Title,
+                null))
+            .ToListAsync();
+    }
 }
 
 public class CreateUserRequest
@@ -151,3 +230,22 @@ public record UserResponse(
     bool IsActive,
     DateTime CreatedAt,
     DateTime UpdatedAt);
+
+public record UserProjectAsset(long ProjectId, string ProjectName);
+
+public record UserTaskAsset(
+    long TaskId,
+    long ProjectId,
+    long? BoardId,
+    string ProjectName,
+    string TaskTitle,
+    string? Detail);
+
+public record UserAssetsResponse(
+    IReadOnlyCollection<UserProjectAsset> OwnedProjects,
+    IReadOnlyCollection<UserProjectAsset> Memberships,
+    IReadOnlyCollection<UserTaskAsset> AssignedTasks,
+    IReadOnlyCollection<UserTaskAsset> ReportedTasks,
+    IReadOnlyCollection<UserTaskAsset> Comments,
+    IReadOnlyCollection<UserTaskAsset> StatusChanges,
+    IReadOnlyCollection<UserTaskAsset> Attachments);
