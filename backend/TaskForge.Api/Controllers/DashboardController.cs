@@ -83,6 +83,7 @@ public class DashboardController : ControllerBase
             .Select(t => new DashboardTaskResponse(
                 t.Id,
                 t.ProjectId,
+                t.BoardColumn != null ? t.BoardColumn.BoardId : null,
                 t.Project.Name,
                 t.Title,
                 t.Status,
@@ -102,6 +103,7 @@ public class DashboardController : ControllerBase
             .Select(t => new DashboardTaskResponse(
                 t.Id,
                 t.ProjectId,
+                t.BoardColumn != null ? t.BoardColumn.BoardId : null,
                 t.Project.Name,
                 t.Title,
                 t.Status,
@@ -148,6 +150,7 @@ public record DashboardGroupCount(
 public record DashboardTaskResponse(
     long Id,
     long ProjectId,
+    long? BoardId,
     string ProjectName,
     string Title,
     string Status,

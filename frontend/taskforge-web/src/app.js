@@ -170,13 +170,34 @@ function renderBreakdown(elementId, groups, total) {
 
 function renderDashboardTasks(elementId, tasks, emptyMessage) {
   $(elementId).innerHTML = tasks.length ? tasks.map(task => `
-    <button class="dashboard-task-row" type="button" data-dashboard-project="${task.projectId}">
+    <button class="dashboard-task-row" type="button" data-dashboard-task="${task.id}" data-dashboard-project="${task.projectId}" data-dashboard-board="${task.boardId || ""}" aria-label="Open task ${escapeHtml(task.title)}">
       <span class="priority ${escapeHtml(task.priority.toLowerCase())}">${escapeHtml(task.priority)}</span>
       <span class="dashboard-task-main"><strong>${escapeHtml(task.title)}</strong><small>${escapeHtml(task.projectName)} · Updated ${new Date(task.updatedAt).toLocaleDateString()}</small></span>
       <span class="status-chip">${escapeHtml(task.status)}</span>
       <span class="dashboard-due ${task.dueDate && new Date(task.dueDate) < new Date() && task.status !== "Done" ? "late" : ""}">${task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No due date"}</span>
       <span aria-hidden="true">→</span>
     </button>`).join("") : `<p class="dashboard-empty">${emptyMessage}</p>`;
+}
+
+async function openDashboardTask(taskId, projectId, boardId) {
+  try {
+    await openProject(projectId);
+    if (Number(state.project?.id) !== Number(projectId)) return;
+    const task = await api(`/api/tasks/${taskId}`);
+    let resolvedBoardId = boardId ? Number(boardId) : null;
+
+    if (!resolvedBoardId && task.boardColumnId) {
+      const boards = await Promise.all(state.project.boards.map(board => api(`/api/boards/${board.id}`)));
+      resolvedBoardId = boards.find(board =>
+        board.columns.some(column => Number(column.id) === Number(task.boardColumnId))
+      )?.id;
+    }
+
+    if (!resolvedBoardId) return toast("This task is not assigned to a board yet.", "error");
+    await openBoard(resolvedBoardId);
+    if (Number(state.board?.id) !== Number(resolvedBoardId)) return;
+    openDialog("editTask", task);
+  } catch (error) { toast(error.message, "error"); }
 }
 
 async function loadUsers() {
@@ -702,8 +723,8 @@ $("usersList").addEventListener("click", event => {
   if (row) openUserDetail(row.dataset.user);
 });
 $("dashboardView").addEventListener("click", event => {
-  const row = event.target.closest("[data-dashboard-project]");
-  if (row) openProject(row.dataset.dashboardProject);
+  const row = event.target.closest("[data-dashboard-task]");
+  if (row) openDashboardTask(row.dataset.dashboardTask, row.dataset.dashboardProject, row.dataset.dashboardBoard);
 });
 $("projectsGrid").addEventListener("click", e => e.target.dataset.project && openProject(e.target.dataset.project));
 $("projectHero").addEventListener("click", event => {
