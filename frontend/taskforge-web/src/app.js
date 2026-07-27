@@ -3,6 +3,7 @@ const state = {
   token: localStorage.getItem("taskforge_token"),
   user: JSON.parse(localStorage.getItem("taskforge_user") || "null"),
   projects: [],
+  users: [],
   dashboard: null,
   currentView: "dashboard",
   project: null,
@@ -123,14 +124,15 @@ function logout(showMessage = true) {
 
 function showView(view) {
   state.currentView = view;
-  ["dashboard", "projects", "project", "board"].forEach(name => $(`${name}View`).classList.toggle("hidden", name !== view));
+  ["dashboard", "users", "projects", "project", "board"].forEach(name => $(`${name}View`).classList.toggle("hidden", name !== view));
   document.querySelectorAll(".nav-item[data-view]").forEach(el => el.classList.toggle("active", el.dataset.view === view || (view === "project" && el.dataset.view === "projects")));
-  const titles = { dashboard: ["Overview", "Dashboard", ""], projects: ["Workspace", "Projects", "+ New project"], project: ["Project", state.project?.name || "Project", "+ New board"], board: ["Board", state.board?.name || "Board", "+ Add task"] };
+  const titles = { dashboard: ["Overview", "Dashboard", ""], users: ["Workspace", "Users", "+ New user"], projects: ["Workspace", "Projects", "+ New project"], project: ["Project", state.project?.name || "Project", "+ New board"], board: ["Board", state.board?.name || "Board", "+ Add task"] };
+  const actions = { dashboard: "", users: "user", projects: "project", project: "board", board: "task" };
   $("pageEyebrow").textContent = titles[view][0];
   $("pageTitle").textContent = titles[view][1];
   $("primaryAction").textContent = titles[view][2];
   $("primaryAction").classList.toggle("hidden", view === "dashboard");
-  $("primaryAction").dataset.action = view === "projects" ? "project" : view === "project" ? "board" : "task";
+  $("primaryAction").dataset.action = actions[view];
 }
 
 async function loadDashboard() {
@@ -174,6 +176,50 @@ function renderDashboardTasks(elementId, tasks, emptyMessage) {
       <span class="dashboard-due ${task.dueDate && new Date(task.dueDate) < new Date() && task.status !== "Done" ? "late" : ""}">${task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "No due date"}</span>
       <span aria-hidden="true">→</span>
     </button>`).join("") : `<p class="dashboard-empty">${emptyMessage}</p>`;
+}
+
+async function loadUsers() {
+  try {
+    state.users = await api("/api/Users");
+    renderUsers();
+  } catch (error) { toast(error.message, "error"); }
+}
+
+function renderUsers() {
+  const query = $("userSearch").value.trim().toLowerCase();
+  const users = state.users.filter(user =>
+    `${user.fullName || ""} ${user.email} ${user.role}`.toLowerCase().includes(query)
+  );
+  $("userCount").textContent = state.users.length;
+  $("activeUserCount").textContent = state.users.filter(user => user.isActive).length;
+  $("adminUserCount").textContent = state.users.filter(user => user.role?.toLowerCase() === "admin").length;
+  $("usersList").innerHTML = users.length ? users.map(user => `
+    <button class="user-row" type="button" data-user="${user.id}">
+      <span class="user-identity"><span class="avatar">${initials(user.fullName || user.email)}</span><span><strong>${escapeHtml(user.fullName || "Unnamed user")}</strong><small>${escapeHtml(user.email)}</small></span></span>
+      <span><i class="role-chip">${escapeHtml(user.role)}</i></span>
+      <span><i class="account-status ${user.isActive ? "active" : "inactive"}"><b></b>${user.isActive ? "Active" : "Inactive"}</i></span>
+      <span class="joined-date">${new Date(user.createdAt).toLocaleDateString()}</span>
+      <span aria-hidden="true">→</span>
+    </button>`).join("") : `<div class="user-empty">${query ? "No users match that search." : "No users have been created yet."}</div>`;
+}
+
+async function openUserDetail(id) {
+  try {
+    const user = await api(`/api/Users/${id}`);
+    $("userDetailTitle").textContent = user.fullName || "Unnamed user";
+    $("userDetailContent").innerHTML = `
+      <div class="user-detail-hero">
+        <span class="avatar large">${initials(user.fullName || user.email)}</span>
+        <div><strong>${escapeHtml(user.fullName || "Unnamed user")}</strong><span>${escapeHtml(user.email)}</span></div>
+      </div>
+      <dl class="user-detail-grid">
+        <div><dt>Role</dt><dd>${escapeHtml(user.role)}</dd></div>
+        <div><dt>Status</dt><dd>${user.isActive ? "Active" : "Inactive"}</dd></div>
+        <div><dt>Created</dt><dd>${new Date(user.createdAt).toLocaleString()}</dd></div>
+        <div><dt>Last updated</dt><dd>${new Date(user.updatedAt).toLocaleString()}</dd></div>
+      </dl>`;
+    $("userDetailDialog").showModal();
+  } catch (error) { toast(error.message, "error"); }
 }
 
 async function loadProjects() {
@@ -338,6 +384,12 @@ function openDialog(mode, task = null) {
       <label class="field">Starting columns<select name="createDefaultColumns"><option value="true">Todo, In Progress, Done</option><option value="false">Start with an empty board</option></select></label>` },
     label: { eyebrow: "Create label", title: "Add a project label", submit: "Create label", fields: labelFields() },
     editLabel: { eyebrow: "Edit label", title: "Update this label", submit: "Save label", fields: labelFields(task) },
+    user: { eyebrow: "Create user", title: "Add a workspace account", submit: "Create user", fields: `
+      <label class="field">Full name<input name="fullName" maxlength="200" placeholder="e.g. Alex Morgan" autofocus /></label>
+      <label class="field">Email address<input name="email" type="email" maxlength="320" placeholder="alex@company.com" required /></label>
+      <label class="field">Temporary password<input name="password" type="password" minlength="8" autocomplete="new-password" placeholder="At least 8 characters" required /></label>
+      <label class="field">Role<select name="role"><option value="User">User</option><option value="Admin">Administrator</option></select></label>
+      <label class="field">Account status<select name="isActive"><option value="true">Active</option><option value="false">Inactive</option></select></label>` },
     task: { eyebrow: "Create task", title: "Add work to the board", submit: "Add task", fields: taskFields() },
     editTask: { eyebrow: "Edit task", title: "Update this task", submit: "Save changes", fields: taskFields(task, true) }
   };
@@ -517,6 +569,11 @@ async function submitDialog(event) {
       await api("/api/projects", { method: "POST", body: JSON.stringify(values) });
       await loadProjects();
       toast("Project created.");
+    } else if (state.dialogMode === "user") {
+      values.isActive = values.isActive === "true";
+      await api("/api/Users", { method: "POST", body: JSON.stringify(values) });
+      await loadUsers();
+      toast("User created.");
     } else if (state.dialogMode === "board") {
       values.createDefaultColumns = values.createDefaultColumns === "true";
       await api(`/api/projects/${state.project.id}/boards`, { method: "POST", body: JSON.stringify(values) });
@@ -609,6 +666,11 @@ $("authForm").addEventListener("submit", handleAuth);
 $("authToggle").addEventListener("click", () => setAuthMode(state.authMode === "login" ? "register" : "login"));
 $("logoutButton").addEventListener("click", () => logout());
 $("projectSearch").addEventListener("input", renderProjects);
+$("userSearch").addEventListener("input", renderUsers);
+$("usersList").addEventListener("click", event => {
+  const row = event.target.closest("[data-user]");
+  if (row) openUserDetail(row.dataset.user);
+});
 $("dashboardView").addEventListener("click", event => {
   const row = event.target.closest("[data-dashboard-project]");
   if (row) openProject(row.dataset.dashboardProject);
@@ -664,8 +726,11 @@ $("dialogFields").addEventListener("input", event => {
 });
 $("dialogClose").addEventListener("click", () => $("entityDialog").close());
 $("dialogCancel").addEventListener("click", () => $("entityDialog").close());
+$("userDetailClose").addEventListener("click", () => $("userDetailDialog").close());
+$("userDetailDone").addEventListener("click", () => $("userDetailDialog").close());
 $("refreshButton").addEventListener("click", () => {
   if (state.currentView === "dashboard") return loadDashboard();
+  if (state.currentView === "users") return loadUsers();
   if (state.currentView === "board" && state.board) return openBoard(state.board.id);
   if (state.currentView === "project" && state.project) return openProject(state.project.id);
   return loadProjects();
@@ -676,6 +741,7 @@ document.querySelectorAll(".nav-item[data-view]").forEach(el => el.addEventListe
   if (view === "board" && !state.board) return toast("Open a board from a project first.");
   showView(view);
   if (view === "dashboard") loadDashboard();
+  if (view === "users") loadUsers();
 }));
 
 checkApi();

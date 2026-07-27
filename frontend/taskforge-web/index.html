@@ -57,6 +57,7 @@
         <nav aria-label="Main navigation">
           <button class="nav-item active" data-view="dashboard"><span>⌂</span> Dashboard</button>
           <button class="nav-item" data-view="projects"><span>◆</span> Projects</button>
+          <button class="nav-item" data-view="users"><span>♙</span> Users</button>
           <button class="nav-item" data-view="board"><span>▦</span> Current board</button>
         </nav>
         <div class="sidebar-bottom">
@@ -106,6 +107,22 @@
               <div class="panel-heading"><div><h2>Needs attention</h2><p>Overdue tasks that are not marked Done.</p></div><span id="overdueTaskCount" class="count-pill">0</span></div>
               <div id="overdueTasks" class="dashboard-task-list"></div>
             </article>
+          </div>
+        </section>
+
+        <section id="usersView" class="content hidden">
+          <div class="summary-grid user-summary">
+            <article><span class="metric-icon lavender">♙</span><div><small>Total users</small><strong id="userCount">0</strong></div></article>
+            <article><span class="metric-icon mint">✓</span><div><small>Active users</small><strong id="activeUserCount">0</strong></div></article>
+            <article><span class="metric-icon peach">◇</span><div><small>Administrators</small><strong id="adminUserCount">0</strong></div></article>
+          </div>
+          <div class="section-heading">
+            <div><h2>User directory</h2><p>View the people who can access this TaskForge workspace.</p></div>
+            <label class="search"><span>⌕</span><input id="userSearch" placeholder="Search users" /></label>
+          </div>
+          <div class="user-table-wrap">
+            <div class="user-table-head"><span>User</span><span>Role</span><span>Status</span><span>Joined</span><span></span></div>
+            <div id="usersList" class="users-list"></div>
           </div>
         </section>
 
@@ -165,6 +182,14 @@
       </form>
     </dialog>
 
-    <script src="src/app.js?v=10"></script>
+    <dialog id="userDetailDialog">
+      <div class="user-detail-shell">
+        <div class="dialog-head"><div><p class="eyebrow accent">User details</p><h2 id="userDetailTitle">Account</h2></div><button id="userDetailClose" class="icon-button" type="button" aria-label="Close">×</button></div>
+        <div id="userDetailContent"></div>
+        <div class="dialog-actions"><button id="userDetailDone" class="button secondary" type="button">Close</button></div>
+      </div>
+    </dialog>
+
+    <script src="src/app.js?v=11"></script>
   </body>
 </html>
