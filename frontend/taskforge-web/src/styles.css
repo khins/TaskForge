@@ -110,8 +110,11 @@ button { cursor: pointer; }
 .empty-state { grid-column: 1 / -1; padding: 60px 24px; text-align: center; background: white; border: 1px dashed #cbd2cb; border-radius: 12px; }
 .empty-state strong { display: block; font: 700 17px "Manrope"; }.empty-state p { color: var(--muted); }
 .back-button { padding: 0; color: var(--green); background: none; border: 0; font-weight: 700; }
-.project-hero { margin-top: 28px; padding: 30px; color: white; background: var(--green); border-radius: 14px; }
+.project-hero { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 28px; padding: 30px; color: white; background: var(--green); border-radius: 14px; }
+.project-hero-copy { min-width: 0; }
 .project-hero h2 { margin: 0 0 8px; font: 800 28px "Manrope"; }.project-hero p { max-width: 700px; margin: 0; color: #d0e5df; }
+.button.project-delete { flex: 0 0 auto; color: #fff3ef; background: rgba(117, 25, 20, .35); border: 1px solid rgba(255,255,255,.28); }
+.button.project-delete:hover { color: white; background: #9d3d37; }
 .boards-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .labels-grid { display: flex; flex-wrap: wrap; gap: 10px; }
 .label-card { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-width: 230px; padding: 12px 14px; background: white; border: 1px solid var(--line); border-radius: 9px; }
@@ -191,4 +194,5 @@ dialog form { padding: 27px; }
   .top-actions .icon-button { display: none; }.section-heading { align-items: stretch; flex-direction: column; }.search { width: 100%; }
   .project-card p, .board-card p { min-height: auto; }.board-toolbar { align-items: stretch; flex-direction: column; }
   .board-actions { align-items: stretch; flex-wrap: wrap; }.label-filter { flex: 1 1 100%; }.label-filter select { width: 100%; }
+  .project-hero { align-items: stretch; flex-direction: column; }.button.project-delete { align-self: flex-start; }
 }

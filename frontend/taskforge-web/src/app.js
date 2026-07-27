@@ -46,6 +46,7 @@ function decodeToken(token) {
   try {
     const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
     return {
+      id: payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"] || payload.nameid || payload.sub || "",
       email: payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"] || "",
       name: payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"] || ""
     };
@@ -156,7 +157,10 @@ async function openProject(id) {
       api(`/api/projects/${id}`),
       api(`/api/projects/${id}/labels`)
     ]);
-    $("projectHero").innerHTML = `<h2>${escapeHtml(state.project.name)}</h2><p>${escapeHtml(state.project.description || "A focused place for this project's work.")}</p>`;
+    const canDeleteProject = Number(state.project.ownerId) === Number(state.user?.id);
+    $("projectHero").innerHTML = `
+      <div class="project-hero-copy"><h2>${escapeHtml(state.project.name)}</h2><p>${escapeHtml(state.project.description || "A focused place for this project's work.")}</p></div>
+      ${canDeleteProject ? `<button id="deleteProjectButton" class="button project-delete" type="button">Delete project</button>` : ""}`;
     renderLabels();
     $("boardsGrid").innerHTML = state.project.boards.length ? state.project.boards.map(board => `
       <article class="board-card">
@@ -413,11 +417,45 @@ async function deleteLabel(labelId) {
   } catch (error) { toast(error.message, "error"); }
 }
 
+async function deleteCurrentProject() {
+  if (!state.project) return;
+  const project = state.project;
+  const confirmed = confirm(`Delete "${project.name}"?\n\nThis permanently deletes the project and all of its boards, tasks, comments, and labels. This action cannot be undone.`);
+  if (!confirmed) return;
+
+  const button = $("deleteProjectButton");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Deleting…";
+  }
+
+  try {
+    await api(`/api/projects/${project.id}`, { method: "DELETE" });
+    state.project = null;
+    state.board = null;
+    state.tasks = [];
+    state.labels = [];
+    state.labelFilter = null;
+    await loadProjects();
+    showView("projects");
+    toast(`"${project.name}" was deleted.`);
+  } catch (error) {
+    toast(error.message, "error");
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Delete project";
+    }
+  }
+}
+
 $("authForm").addEventListener("submit", handleAuth);
 $("authToggle").addEventListener("click", () => setAuthMode(state.authMode === "login" ? "register" : "login"));
 $("logoutButton").addEventListener("click", () => logout());
 $("projectSearch").addEventListener("input", renderProjects);
 $("projectsGrid").addEventListener("click", e => e.target.dataset.project && openProject(e.target.dataset.project));
+$("projectHero").addEventListener("click", event => {
+  if (event.target.id === "deleteProjectButton") deleteCurrentProject();
+});
 $("boardsGrid").addEventListener("click", e => e.target.dataset.board && openBoard(e.target.dataset.board));
 $("labelsGrid").addEventListener("click", event => {
   const editId = event.target.dataset.editLabel;
@@ -472,7 +510,8 @@ document.querySelectorAll(".nav-item[data-view]").forEach(el => el.addEventListe
 
 checkApi();
 if (state.token) {
-  state.user ||= decodeToken(state.token);
+  state.user = { ...(state.user || {}), ...decodeToken(state.token) };
+  localStorage.setItem("taskforge_user", JSON.stringify(state.user));
   showApp();
   loadProjects();
 }
