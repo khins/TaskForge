@@ -4,6 +4,7 @@ const state = {
   user: JSON.parse(localStorage.getItem("taskforge_user") || "null"),
   projects: [],
   users: [],
+  selectedUser: null,
   dashboard: null,
   currentView: "dashboard",
   project: null,
@@ -206,6 +207,7 @@ function renderUsers() {
 async function openUserDetail(id) {
   try {
     const user = await api(`/api/Users/${id}`);
+    state.selectedUser = user;
     $("userDetailTitle").textContent = user.fullName || "Unnamed user";
     $("userDetailContent").innerHTML = `
       <div class="user-detail-hero">
@@ -220,6 +222,34 @@ async function openUserDetail(id) {
       </dl>`;
     $("userDetailDialog").showModal();
   } catch (error) { toast(error.message, "error"); }
+}
+
+async function deleteSelectedUser() {
+  const user = state.selectedUser;
+  if (!user) return;
+  const name = user.fullName || user.email;
+  if (!confirm(`Delete "${name}"?\n\nDeletion will only succeed if all projects, memberships, tasks, comments, attachments, and other assets associated with this user have already been removed or reassigned.`)) return;
+
+  const button = $("deleteUserButton");
+  button.disabled = true;
+  button.textContent = "Checking assets…";
+  try {
+    await api(`/api/Users/${user.id}`, { method: "DELETE" });
+    $("userDetailDialog").close();
+    state.selectedUser = null;
+    if (Number(user.id) === Number(state.user?.id)) {
+      logout(false);
+      toast("Your user account was deleted.");
+      return;
+    }
+    await loadUsers();
+    toast(`"${name}" was deleted.`);
+  } catch (error) {
+    toast(error.message, "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = "Delete user";
+  }
 }
 
 async function loadProjects() {
@@ -728,6 +758,7 @@ $("dialogClose").addEventListener("click", () => $("entityDialog").close());
 $("dialogCancel").addEventListener("click", () => $("entityDialog").close());
 $("userDetailClose").addEventListener("click", () => $("userDetailDialog").close());
 $("userDetailDone").addEventListener("click", () => $("userDetailDialog").close());
+$("deleteUserButton").addEventListener("click", deleteSelectedUser);
 $("refreshButton").addEventListener("click", () => {
   if (state.currentView === "dashboard") return loadDashboard();
   if (state.currentView === "users") return loadUsers();

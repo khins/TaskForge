@@ -203,6 +203,9 @@ dialog form { padding: 27px; }
 .dialog-head { display: flex; justify-content: space-between; align-items: start; margin-bottom: 22px; }
 .dialog-head h2 { margin: 0; font: 800 23px "Manrope"; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 26px; }
+.dialog-actions.split-actions { justify-content: space-between; }
+.button.danger { color: #9d3d37; background: #fff5f3; border: 1px solid #e8c7c3; }
+.button.danger:hover { color: white; background: #9d3d37; border-color: #9d3d37; }
 .attachments-section { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line); }
 .attachments-list { max-height: 220px; margin: 18px 0; overflow-y: auto; }
 .attachment-item { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 10px 0; border-bottom: 1px solid #edf0ec; }

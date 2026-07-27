@@ -81,6 +81,57 @@ public class UsersController : ControllerBase
         var response = new UserResponse(user.Id, user.Email, user.FullName, user.Role, user.IsActive, user.CreatedAt, user.UpdatedAt);
         return CreatedAtAction(nameof(GetUser), new { id = user.Id }, response);
     }
+
+    [HttpDelete("{id:long}")]
+    [Authorize]
+    public async Task<IActionResult> DeleteUser(long id)
+    {
+        var user = await _context.Users.SingleOrDefaultAsync(u => u.Id == id);
+        if (user is null)
+        {
+            return NotFound();
+        }
+
+        var dependencies = new Dictionary<string, int>
+        {
+            ["owned projects"] = await _context.Projects.CountAsync(p => p.OwnerId == id),
+            ["project memberships"] = await _context.ProjectMembers.CountAsync(m => m.UserId == id),
+            ["assigned tasks"] = await _context.Tasks.CountAsync(t => t.AssigneeId == id),
+            ["reported tasks"] = await _context.Tasks.CountAsync(t => t.ReporterId == id),
+            ["comments"] = await _context.TaskComments.CountAsync(c => c.AuthorId == id),
+            ["status changes"] = await _context.TaskStatusHistory.CountAsync(h => h.ChangedById == id),
+            ["attachments"] = await _context.Attachments.CountAsync(a => a.UploadedById == id)
+        };
+
+        var blockingAssets = dependencies
+            .Where(item => item.Value > 0)
+            .ToDictionary(item => item.Key, item => item.Value);
+
+        if (blockingAssets.Count > 0)
+        {
+            var summary = string.Join(", ", blockingAssets.Select(item => $"{item.Value} {item.Key}"));
+            return Conflict(new
+            {
+                Message = $"User cannot be deleted while they still have TaskForge assets: {summary}. Remove or reassign these assets first.",
+                Assets = blockingAssets
+            });
+        }
+
+        _context.Users.Remove(user);
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            return Conflict(new
+            {
+                Message = "User cannot be deleted because TaskForge data still references this account. Remove or reassign those assets first."
+            });
+        }
+
+        return NoContent();
+    }
 }
 
 public class CreateUserRequest
