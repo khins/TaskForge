@@ -39,10 +39,21 @@ async function api(path, options = {}) {
 
 function toast(message, type = "") {
   const el = $("toast");
+  clearTimeout(toast.timer);
+  clearTimeout(toast.hideTimer);
+  if (typeof el.showPopover === "function" && !el.matches(":popover-open")) {
+    el.showPopover();
+  }
   el.textContent = message;
   el.className = `toast show ${type}`;
-  clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => el.className = "toast", 3200);
+  toast.timer = setTimeout(() => {
+    el.className = "toast";
+    toast.hideTimer = setTimeout(() => {
+      if (typeof el.hidePopover === "function" && el.matches(":popover-open")) {
+        el.hidePopover();
+      }
+    }, 250);
+  }, 5000);
 }
 
 function initials(value = "TF") {
@@ -546,13 +557,23 @@ function safeColor(value) {
 function taskFields(task = {}, includeComments = false) {
   task ??= {};
   const dueDate = task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : "";
-  const projectMembers = [...(state.project?.members || [])].sort((a, b) =>
+  const projectMembers = [...(state.project?.members || [])];
+  const currentUserIsProjectOwner = Number(state.project?.ownerId) === Number(state.user?.id);
+  const currentUserIsListed = projectMembers.some(member => Number(member.userId) === Number(state.user?.id));
+  if (!currentUserIsListed && (currentUserIsProjectOwner || isGlobalAdmin())) {
+    projectMembers.push({
+      userId: Number(state.user.id),
+      fullName: state.user.fullName || state.user.name,
+      email: state.user.email
+    });
+  }
+  projectMembers.sort((a, b) =>
     (a.fullName || a.email).localeCompare(b.fullName || b.email)
   );
-  const currentUserIsMember = projectMembers.some(member => Number(member.userId) === Number(state.user?.id));
+  const currentUserIsAssignable = projectMembers.some(member => Number(member.userId) === Number(state.user?.id));
   const selectedAssigneeId = task.id
     ? task.assigneeId
-    : (currentUserIsMember ? Number(state.user.id) : null);
+    : (currentUserIsAssignable ? Number(state.user.id) : null);
   return `
     <label class="field">Task title<input name="title" placeholder="What needs to be done?" value="${escapeHtml(task.title || "")}" required autofocus /></label>
     <label class="field">Description<textarea name="description" rows="3" placeholder="Add useful details or context">${escapeHtml(task.description || "")}</textarea></label>

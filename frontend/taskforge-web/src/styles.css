@@ -265,7 +265,7 @@ dialog form { padding: 27px; }
 .comment-composer-actions small { color: var(--muted); font-size: 10px; }
 .button.compact { min-height: 34px; padding: 7px 12px; font-size: 11px; }
 .button:disabled { cursor: wait; opacity: .65; }
-.toast { position: fixed; z-index: 99; right: 24px; bottom: 24px; max-width: 360px; padding: 13px 17px; color: white; background: var(--ink); border-radius: 8px; box-shadow: var(--shadow); opacity: 0; transform: translateY(12px); pointer-events: none; transition: .25s; }
+.toast { position: fixed; z-index: 99; inset: auto 24px 24px auto; max-width: min(420px, calc(100vw - 48px)); margin: 0; padding: 13px 17px; color: white; background: var(--ink); border: 0; border-radius: 8px; box-shadow: 0 12px 35px rgba(20,38,32,.3); opacity: 0; transform: translateY(12px); pointer-events: none; transition: .25s; }
 .toast.show { opacity: 1; transform: translateY(0); }
 .toast.error { background: #9d3d37; }
 

@@ -349,11 +349,18 @@ public class TasksController : ControllerBase
 
         if (assigneeId.HasValue)
         {
-            var assigneeMatchesProject = await _context.ProjectMembers.AnyAsync(m =>
-                m.ProjectId == projectId &&
-                m.UserId == assigneeId.Value);
+            var assigneeMatchesProject = await _context.Projects.AnyAsync(p =>
+                p.Id == projectId &&
+                (p.OwnerId == assigneeId.Value ||
+                 p.Members.Any(m => m.UserId == assigneeId.Value)));
 
-            if (!assigneeMatchesProject)
+            var currentUserId = GetCurrentUserId();
+            var globalAdminAssigningSelf =
+                User.IsInRole("admin") &&
+                currentUserId.HasValue &&
+                currentUserId.Value == assigneeId.Value;
+
+            if (!assigneeMatchesProject && !globalAdminAssigningSelf)
             {
                 return false;
             }
