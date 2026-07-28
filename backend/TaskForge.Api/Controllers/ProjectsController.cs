@@ -217,6 +217,16 @@ public class ProjectsController : ControllerBase
             return Forbid();
         }
 
+        var taskCount = await _context.Tasks.CountAsync(t => t.ProjectId == id);
+        if (taskCount > 0)
+        {
+            return Conflict(new
+            {
+                Message = $"Project cannot be deleted while it has {taskCount} {(taskCount == 1 ? "task" : "tasks")}. Delete all project tasks first.",
+                TaskCount = taskCount
+            });
+        }
+
         _context.Projects.Remove(project);
         await _context.SaveChangesAsync();
 

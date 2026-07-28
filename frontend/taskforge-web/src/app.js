@@ -909,16 +909,34 @@ async function deleteLabel(labelId) {
 async function deleteCurrentProject() {
   if (!state.project) return;
   const project = state.project;
-  const confirmed = confirm(`Delete "${project.name}"?\n\nThis permanently deletes the project and all of its boards, tasks, comments, and labels. This action cannot be undone.`);
-  if (!confirmed) return;
-
   const button = $("deleteProjectButton");
-  if (button) {
-    button.disabled = true;
-    button.textContent = "Deleting…";
-  }
 
   try {
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Checking…";
+    }
+
+    const latestProject = await api(`/api/projects/${project.id}`);
+    if (latestProject.taskCount > 0) {
+      toast(`"${project.name}" has ${latestProject.taskCount} ${latestProject.taskCount === 1 ? "task" : "tasks"}. Delete all project tasks first.`, "error");
+      if (button) {
+        button.disabled = false;
+        button.textContent = "Delete project";
+      }
+      return;
+    }
+
+    const confirmed = confirm(`Delete "${project.name}"?\n\nThere are no tasks in this project. This permanently deletes the project and its empty boards, labels, and memberships. This action cannot be undone.`);
+    if (!confirmed) {
+      if (button) {
+        button.disabled = false;
+        button.textContent = "Delete project";
+      }
+      return;
+    }
+
+    if (button) button.textContent = "Deleting…";
     await api(`/api/projects/${project.id}`, { method: "DELETE" });
     state.project = null;
     state.board = null;
