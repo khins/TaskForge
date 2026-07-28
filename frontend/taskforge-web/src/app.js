@@ -546,10 +546,21 @@ function safeColor(value) {
 function taskFields(task = {}, includeComments = false) {
   task ??= {};
   const dueDate = task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 10) : "";
+  const projectMembers = [...(state.project?.members || [])].sort((a, b) =>
+    (a.fullName || a.email).localeCompare(b.fullName || b.email)
+  );
+  const currentUserIsMember = projectMembers.some(member => Number(member.userId) === Number(state.user?.id));
+  const selectedAssigneeId = task.id
+    ? task.assigneeId
+    : (currentUserIsMember ? Number(state.user.id) : null);
   return `
     <label class="field">Task title<input name="title" placeholder="What needs to be done?" value="${escapeHtml(task.title || "")}" required autofocus /></label>
     <label class="field">Description<textarea name="description" rows="3" placeholder="Add useful details or context">${escapeHtml(task.description || "")}</textarea></label>
     <label class="field">Workflow stage<select name="boardColumnId">${state.board?.columns.map(c => `<option value="${c.id}" ${c.id === task.boardColumnId ? "selected" : ""}>${escapeHtml(c.name)}</option>`).join("") || ""}</select></label>
+    <label class="field">Assignee<select name="assigneeId">
+      <option value="">Unassigned</option>
+      ${projectMembers.map(member => `<option value="${member.userId}" ${Number(member.userId) === Number(selectedAssigneeId) ? "selected" : ""}>${escapeHtml(member.fullName || member.email)}${Number(member.userId) === Number(state.user?.id) ? " (me)" : ""}</option>`).join("")}
+    </select></label>
     <label class="field">Priority<select name="priority">${["Medium", "High", "Urgent", "Low"].map(priority => `<option ${priority === task.priority ? "selected" : ""}>${priority}</option>`).join("")}</select></label>
     <label class="field">Due date<input name="dueDate" type="date" value="${dueDate}" /></label>
     <fieldset class="label-picker">
@@ -864,11 +875,11 @@ async function submitDialog(event) {
       toast(editing ? "Label updated." : "Label created.");
     } else if (state.dialogMode === "task" || state.dialogMode === "editTask") {
       values.boardColumnId = Number(values.boardColumnId);
+      values.assigneeId = values.assigneeId ? Number(values.assigneeId) : null;
       values.dueDate = values.dueDate ? new Date(`${values.dueDate}T12:00:00`).toISOString() : null;
       values.status = state.board.columns.find(c => c.id === values.boardColumnId)?.name || "Todo";
       let savedTask;
       if (state.dialogMode === "editTask") {
-        values.assigneeId = state.selectedTask.assigneeId;
         values.position = state.selectedTask.position;
         savedTask = await api(`/api/tasks/${state.selectedTask.id}`, { method: "PUT", body: JSON.stringify(values) });
       } else {
