@@ -569,10 +569,31 @@ function openDialog(mode, task = null) {
   $("dialogTitle").textContent = config.title;
   $("dialogSubmit").textContent = config.submit;
   $("dialogFields").innerHTML = config.fields;
+  $("deleteTaskButton").classList.toggle("hidden", mode !== "editTask");
   $("entityDialog").showModal();
   if (mode === "editTask") {
     loadComments(task.id);
     loadAttachments(task.id);
+  }
+}
+
+async function deleteSelectedTask() {
+  const task = state.selectedTask;
+  if (!task || !confirm(`Delete "${task.title}"?\n\nThis permanently deletes the task and its related comments, attachment records, labels, and status history. This action cannot be undone.`)) return;
+
+  const button = $("deleteTaskButton");
+  button.disabled = true;
+  button.textContent = "Deleting…";
+  try {
+    await api(`/api/tasks/${task.id}`, { method: "DELETE" });
+    $("entityDialog").close();
+    state.selectedTask = null;
+    await openBoard(state.board.id);
+    toast(`"${task.title}" was deleted.`);
+  } catch (error) {
+    toast(error.message, "error");
+    button.disabled = false;
+    button.textContent = "Delete task";
   }
 }
 
@@ -944,6 +965,7 @@ $("dialogFields").addEventListener("input", event => {
 });
 $("dialogClose").addEventListener("click", () => $("entityDialog").close());
 $("dialogCancel").addEventListener("click", () => $("entityDialog").close());
+$("deleteTaskButton").addEventListener("click", deleteSelectedTask);
 $("userDetailClose").addEventListener("click", () => $("userDetailDialog").close());
 $("userDetailDone").addEventListener("click", () => $("userDetailDialog").close());
 $("deleteUserButton").addEventListener("click", deleteSelectedUser);

@@ -219,6 +219,7 @@ dialog form { padding: 27px; }
 .dialog-head { display: flex; justify-content: space-between; align-items: start; margin-bottom: 22px; }
 .dialog-head h2 { margin: 0; font: 800 23px "Manrope"; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 26px; }
+.dialog-actions .task-delete { margin-right: auto; }
 .dialog-actions.split-actions { justify-content: space-between; }
 .button.danger { color: #9d3d37; background: #fff5f3; border: 1px solid #e8c7c3; }
 .button.danger:hover { color: white; background: #9d3d37; border-color: #9d3d37; }
