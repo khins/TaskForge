@@ -169,6 +169,10 @@ button { cursor: pointer; }
 .project-card h3, .board-card h3 { margin: 0 0 8px; font: 700 16px "Manrope"; }
 .project-card p, .board-card p { min-height: 40px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
 .card-meta { display: flex; gap: 14px; margin-top: 22px; padding-top: 15px; color: var(--muted); border-top: 1px solid #edf0ec; font-size: 11px; }
+.board-card .card-meta { position: relative; z-index: 1; align-items: center; justify-content: space-between; }
+.board-delete { padding: 3px 0; color: #a74740; background: transparent; border: 0; font: 700 10px "Manrope"; }
+.board-delete:hover { color: #7f2e29; text-decoration: underline; }
+.board-delete:disabled { color: var(--muted); cursor: wait; text-decoration: none; }
 .empty-state { grid-column: 1 / -1; padding: 60px 24px; text-align: center; background: white; border: 1px dashed #cbd2cb; border-radius: 12px; }
 .empty-state strong { display: block; font: 700 17px "Manrope"; }.empty-state p { color: var(--muted); }
 .back-button { padding: 0; color: var(--green); background: none; border: 0; font-weight: 700; }

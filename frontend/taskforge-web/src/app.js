@@ -423,7 +423,11 @@ async function openProject(id) {
       api(`/api/projects/${id}`),
       api(`/api/projects/${id}/labels`)
     ]);
-    const canDeleteProject = Number(state.project.ownerId) === Number(state.user?.id);
+    const currentMembership = state.project.members.find(member => Number(member.userId) === Number(state.user?.id));
+    const canManageProject = state.user?.role === "admin" ||
+      Number(state.project.ownerId) === Number(state.user?.id) ||
+      ["owner", "admin"].includes(currentMembership?.role?.toLowerCase());
+    const canDeleteProject = state.user?.role === "admin" || Number(state.project.ownerId) === Number(state.user?.id);
     $("projectHero").innerHTML = `
       <div class="project-hero-copy"><h2>${escapeHtml(state.project.name)}</h2><p>${escapeHtml(state.project.description || "A focused place for this project's work.")}</p></div>
       ${canDeleteProject ? `<button id="deleteProjectButton" class="button project-delete" type="button">Delete project</button>` : ""}`;
@@ -433,7 +437,10 @@ async function openProject(id) {
         <button class="card-hit" data-board="${board.id}" aria-label="Open ${escapeHtml(board.name)}"></button>
         <span class="card-icon">▦</span><h3>${escapeHtml(board.name)}</h3>
         <p>${escapeHtml(board.description || "A flexible workflow for your team.")}</p>
-        <div class="card-meta"><span>${board.columnCount} columns</span></div>
+        <div class="card-meta">
+          <span>${board.columnCount} columns</span>
+          ${canManageProject ? `<button class="board-delete" type="button" data-delete-board="${board.id}" aria-label="Delete ${escapeHtml(board.name)}">Delete</button>` : ""}
+        </div>
       </article>`).join("") : emptyState("No boards yet", "Create a board with Todo, In Progress, and Done columns.");
     showView("project");
   } catch (error) { toast(error.message, "error"); }
@@ -898,6 +905,36 @@ async function deleteCurrentProject() {
   }
 }
 
+async function deleteBoard(boardId, button) {
+  const board = state.project?.boards.find(item => item.id === Number(boardId));
+  if (!board) return;
+
+  try {
+    const tasks = await api(`/api/boards/${board.id}/tasks`);
+    const activeTaskCount = tasks.filter(task => task.status !== "Done").length;
+    if (activeTaskCount > 0) {
+      toast(`"${board.name}" has ${activeTaskCount} active ${activeTaskCount === 1 ? "task" : "tasks"}. Move or delete the active work first.`, "error");
+      return;
+    }
+
+    if (!confirm(`Delete "${board.name}"?\n\nThere are no active tasks. This permanently deletes the board, its columns, and any completed tasks. This action cannot be undone.`)) return;
+
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Deleting…";
+    }
+    await api(`/api/boards/${board.id}`, { method: "DELETE" });
+    await openProject(state.project.id);
+    toast(`"${board.name}" was deleted.`);
+  } catch (error) {
+    toast(error.message, "error");
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Delete";
+    }
+  }
+}
+
 $("authForm").addEventListener("submit", handleAuth);
 $("authToggle").addEventListener("click", () => setAuthMode(state.authMode === "login" ? "register" : "login"));
 $("logoutButton").addEventListener("click", () => logout());
@@ -915,7 +952,15 @@ $("projectsGrid").addEventListener("click", e => e.target.dataset.project && ope
 $("projectHero").addEventListener("click", event => {
   if (event.target.id === "deleteProjectButton") deleteCurrentProject();
 });
-$("boardsGrid").addEventListener("click", e => e.target.dataset.board && openBoard(e.target.dataset.board));
+$("boardsGrid").addEventListener("click", event => {
+  const deleteButton = event.target.closest("[data-delete-board]");
+  if (deleteButton) {
+    deleteBoard(deleteButton.dataset.deleteBoard, deleteButton);
+    return;
+  }
+  const boardButton = event.target.closest("[data-board]");
+  if (boardButton) openBoard(boardButton.dataset.board);
+});
 $("labelsGrid").addEventListener("click", event => {
   const editId = event.target.dataset.editLabel;
   const deleteId = event.target.dataset.deleteLabel;

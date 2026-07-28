@@ -208,6 +208,20 @@ public class BoardsController : ControllerBase
             return NotFound(new { Message = "Board not found." });
         }
 
+        var activeTaskCount = await _context.Tasks.CountAsync(t =>
+            t.BoardColumn != null &&
+            t.BoardColumn.BoardId == id &&
+            t.Status != "Done");
+
+        if (activeTaskCount > 0)
+        {
+            return Conflict(new
+            {
+                Message = $"Board cannot be deleted while it has {activeTaskCount} active {(activeTaskCount == 1 ? "task" : "tasks")}. Move or delete the active work first.",
+                ActiveTaskCount = activeTaskCount
+            });
+        }
+
         _context.Boards.Remove(board);
         await _context.SaveChangesAsync();
 
