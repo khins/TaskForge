@@ -110,7 +110,7 @@ function showApp() {
   $("authView").classList.add("hidden");
   $("appView").classList.remove("hidden");
   renderCurrentUser();
-  showView("dashboard");
+  showView("dashboard", { historyMode: "replace" });
   loadCurrentUserProfile();
 }
 
@@ -148,7 +148,38 @@ function logout(showMessage = true) {
   if (showMessage) toast("You’ve been signed out.");
 }
 
-function showView(view) {
+function routeForView(view) {
+  const route = { taskForge: true, view };
+  if (view === "project" && state.project) route.projectId = state.project.id;
+  if (view === "board" && state.board) {
+    route.projectId = state.project?.id || state.board.projectId;
+    route.boardId = state.board.id;
+  }
+  return route;
+}
+
+function routeUrl(route) {
+  if (route.view === "board") return `#board/${route.boardId}`;
+  if (route.view === "project") return `#project/${route.projectId}`;
+  return `#${route.view}`;
+}
+
+function updateBrowserHistory(view, mode) {
+  if (mode === "none") return;
+  const route = routeForView(view);
+  const current = history.state;
+  const isSameRoute = current?.taskForge &&
+    current.view === route.view &&
+    Number(current.projectId || 0) === Number(route.projectId || 0) &&
+    Number(current.boardId || 0) === Number(route.boardId || 0);
+  if (mode === "replace" || isSameRoute) {
+    history.replaceState(route, "", routeUrl(route));
+  } else {
+    history.pushState(route, "", routeUrl(route));
+  }
+}
+
+function showView(view, { historyMode = "push" } = {}) {
   state.currentView = view;
   ["dashboard", "users", "projects", "project", "board"].forEach(name => $(`${name}View`).classList.toggle("hidden", name !== view));
   document.querySelectorAll(".nav-item[data-view]").forEach(el => el.classList.toggle("active", el.dataset.view === view || (view === "project" && el.dataset.view === "projects")));
@@ -159,6 +190,7 @@ function showView(view) {
   $("primaryAction").textContent = titles[view][2];
   $("primaryAction").classList.toggle("hidden", view === "dashboard");
   $("primaryAction").dataset.action = actions[view];
+  updateBrowserHistory(view, historyMode);
 }
 
 async function loadDashboard() {
@@ -416,7 +448,7 @@ function renderProjects() {
     </article>`).join("") : emptyState(query ? "No matching projects" : "No projects yet", query ? "Try another search." : "Create your first project to begin organizing work.");
 }
 
-async function openProject(id) {
+async function openProject(id, { historyMode = "push" } = {}) {
   try {
     state.labelFilter = null;
     [state.project, state.labels] = await Promise.all([
@@ -442,7 +474,7 @@ async function openProject(id) {
           ${canManageProject ? `<button class="board-delete" type="button" data-delete-board="${board.id}" aria-label="Delete ${escapeHtml(board.name)}">Delete</button>` : ""}
         </div>
       </article>`).join("") : emptyState("No boards yet", "Create a board with Todo, In Progress, and Done columns.");
-    showView("project");
+    showView("project", { historyMode });
   } catch (error) { toast(error.message, "error"); }
 }
 
@@ -460,7 +492,7 @@ function renderLabels() {
     </article>`).join("") : `<div class="labels-empty">No labels yet. Add one to make tasks easier to scan.</div>`;
 }
 
-async function openBoard(id) {
+async function openBoard(id, { historyMode = "push" } = {}) {
   try {
     [state.board, state.tasks] = await Promise.all([api(`/api/boards/${id}`), api(`/api/boards/${id}/tasks`)]);
     state.tasks = await Promise.all(state.tasks.map(task =>
@@ -470,7 +502,7 @@ async function openBoard(id) {
     $("boardDescription").textContent = state.board.description || `${state.board.columns.length} stage workflow`;
     renderLabelFilter();
     renderBoard();
-    showView("board");
+    showView("board", { historyMode });
   } catch (error) { toast(error.message, "error"); }
 }
 
@@ -973,8 +1005,8 @@ $("kanban").addEventListener("click", e => {
   const task = state.tasks.find(item => item.id === Number(card.dataset.task));
   if (task) api(`/api/tasks/${task.id}`).then(detail => openDialog("editTask", detail)).catch(error => toast(error.message, "error"));
 });
-$("backToProjects").addEventListener("click", () => showView("projects"));
-$("backToProject").addEventListener("click", () => showView("project"));
+$("backToProjects").addEventListener("click", () => history.back());
+$("backToProject").addEventListener("click", () => history.back());
 $("newBoardButton").addEventListener("click", () => openDialog("board"));
 $("newLabelButton").addEventListener("click", () => openDialog("label"));
 $("newTaskButton").addEventListener("click", () => openDialog("task"));
@@ -1050,6 +1082,32 @@ document.querySelectorAll(".nav-item[data-view]").forEach(el => el.addEventListe
   if (view === "dashboard") loadDashboard();
   if (view === "users") loadUsers();
 }));
+
+window.addEventListener("popstate", async event => {
+  if (!state.token) return;
+  const route = event.state?.taskForge ? event.state : { taskForge: true, view: "dashboard" };
+  try {
+    if (route.view === "project" && route.projectId) {
+      await openProject(route.projectId, { historyMode: "none" });
+      return;
+    }
+    if (route.view === "board" && route.boardId) {
+      if (!state.project || Number(state.project.id) !== Number(route.projectId)) {
+        await openProject(route.projectId, { historyMode: "none" });
+      }
+      await openBoard(route.boardId, { historyMode: "none" });
+      return;
+    }
+    showView(route.view || "dashboard", { historyMode: "none" });
+    if (route.view === "dashboard") await loadDashboard();
+    if (route.view === "users") await loadUsers();
+    if (route.view === "projects") await loadProjects();
+  } catch (error) {
+    toast(error.message, "error");
+    showView("dashboard", { historyMode: "replace" });
+    await loadDashboard();
+  }
+});
 
 checkApi();
 if (state.token) {
