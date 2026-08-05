@@ -3,9 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "serve -s . -l 8000"
+    "dev": "serve -s . -l 8000",
+    "test:e2e": "cypress run",
+    "test:e2e:open": "cypress open"
   },
   "dependencies": {
     "serve": "^14.0.1"
+  },
+  "devDependencies": {
+    "cypress": "15.19.0"
   }
 }
