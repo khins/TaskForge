@@ -640,7 +640,10 @@ function openDialog(mode, task = null) {
   $("dialogTitle").textContent = config.title;
   $("dialogSubmit").textContent = config.submit;
   $("dialogFields").innerHTML = config.fields;
-  $("deleteTaskButton").classList.toggle("hidden", mode !== "editTask");
+  const deleteTaskButton = $("deleteTaskButton");
+  deleteTaskButton.classList.toggle("hidden", mode !== "editTask");
+  deleteTaskButton.disabled = false;
+  deleteTaskButton.textContent = "Delete task";
   $("entityDialog").showModal();
   if (mode === "editTask") {
     loadComments(task.id);
