@@ -131,6 +131,66 @@ describe("TaskForge authenticated navigation", () => {
       });
   });
 
+  it("archives a Done task and removes it from the board", () => {
+    const taskTitle = `Cypress archive task ${Date.now()}`;
+
+    cy.get('.nav-item[data-view="projects"]').click();
+    cy.get("#projectsGrid .project-card")
+      .first()
+      .find("[data-project]")
+      .click({ force: true });
+
+    cy.get("#boardsGrid .board-card")
+      .first()
+      .find("[data-board]")
+      .click({ force: true });
+
+    cy.get("#newTaskButton").click();
+    cy.get('input[name="title"]').type(taskTitle);
+    cy.get('textarea[name="description"]').type("Created for the Cypress archive test.");
+
+    cy.intercept("POST", "**/api/projects/*/tasks").as("createArchivableTask");
+    cy.get("#dialogSubmit").click();
+    cy.wait("@createArchivableTask").its("response.statusCode").should("eq", 201);
+
+    cy.get("#kanban").contains(".task-card", taskTitle).click();
+    cy.get("#entityDialog").should("be.visible");
+    cy.get("#archiveTaskButton").should("not.be.visible");
+    cy.get('select[name="boardColumnId"]').select("Done");
+
+    cy.intercept("PUT", "**/api/tasks/*").as("completeArchivableTask");
+    cy.get("#dialogSubmit").click();
+    cy.wait("@completeArchivableTask").its("response.statusCode").should("eq", 200);
+
+    cy.contains(".kanban-column .column-head h3", "Done")
+      .parents(".kanban-column")
+      .within(() => {
+        cy.contains(".task-card", taskTitle).should("be.visible").click();
+      });
+
+    cy.get("#entityDialog").should("be.visible");
+    cy.get("#archiveTaskButton")
+      .scrollIntoView()
+      .should("be.visible")
+      .and("be.enabled");
+    cy.on("window:confirm", message => {
+      expect(message).to.contain(taskTitle);
+      expect(message).to.contain("removed from the Kanban board");
+      return true;
+    });
+
+    cy.intercept("PATCH", "**/api/tasks/*/archive").as("archiveTask");
+    cy.get("#archiveTaskButton").click();
+
+    cy.wait("@archiveTask").then(({ response }) => {
+      expect(response.statusCode).to.eq(200);
+      expect(response.body.archivedAt).to.be.a("string");
+    });
+    cy.get("#entityDialog").should("not.be.visible");
+    cy.get("#toast").should("contain", `"${taskTitle}" was archived`);
+    cy.get("#kanban").contains(".task-card", taskTitle).should("not.exist");
+  });
+
   it("deletes a newly created task from the board", () => {
     const taskTitle = `Cypress delete task ${Date.now()}`;
 
