@@ -35,6 +35,81 @@ describe("TaskForge authenticated navigation", () => {
     cy.get("#dashboardAssignedCount").should("not.have.text", "—");
   });
 
+  it("creates a new user and sets the login status to inactive", () => {
+    const fullName = "Cypress Test User";
+    const email = `cypress.user.${Date.now()}@taskforge.test`;
+    const password = "CypressTest123!";
+
+    cy.get('#usersNavItem[data-view="users"]').should("be.visible").click();
+    cy.get("#usersView").should("be.visible");
+    cy.get("#primaryAction")
+      .should("be.visible")
+      .and("contain", "New user")
+      .click();
+
+    cy.get("#entityDialog").should("be.visible");
+    cy.get("#dialogTitle").should("have.text", "Add a workspace account");
+    cy.get('input[name="fullName"]').type(fullName);
+    cy.get('input[name="email"]').type(email);
+    cy.get('input[name="password"]').type(password, { log: false });
+    cy.get('select[name="role"]').select("User");
+    cy.get('select[name="isActive"]').select("true");
+
+    cy.intercept("POST", "**/api/Users").as("createUser");
+    cy.get("#dialogSubmit").should("have.text", "Create user").click();
+
+    cy.wait("@createUser").then(({ request, response }) => {
+      expect(request.body.fullName).to.eq(fullName);
+      expect(request.body.email).to.eq(email);
+      expect(request.body.role).to.eq("User");
+      expect(request.body.isActive).to.eq(true);
+      expect(response.statusCode).to.eq(201);
+      expect(response.body.fullName).to.eq(fullName);
+      expect(response.body.email).to.eq(email);
+      expect(response.body.role).to.eq("user");
+      expect(response.body.isActive).to.eq(true);
+    });
+
+    cy.get("#entityDialog").should("not.be.visible");
+    cy.get("#toast").should("contain", "User created");
+    cy.get("#usersList")
+      .contains(".user-row strong", fullName)
+      .parents(".user-row")
+      .should("contain", email)
+      .and("contain", "user")
+      .and("contain", "Active");
+
+    cy.get("#usersList")
+      .contains(".user-row strong", fullName)
+      .parents(".user-row")
+      .click();
+
+    cy.get("#userDetailDialog").should("be.visible");
+    cy.get("#userDetailTitle").should("have.text", fullName);
+    cy.get("#adminUserActive").should("have.value", "true").select("false");
+
+    cy.intercept("PUT", "**/api/Users/*").as("deactivateUser");
+    cy.get("#saveUserAdminButton").click();
+
+    cy.wait("@deactivateUser").then(({ request, response }) => {
+      expect(request.body.fullName).to.eq(fullName);
+      expect(request.body.email).to.eq(email);
+      expect(request.body.role).to.eq("user");
+      expect(request.body.isActive).to.eq(false);
+      expect(response.statusCode).to.eq(200);
+      expect(response.body.isActive).to.eq(false);
+    });
+
+    cy.get("#toast").should("contain", "User account updated");
+    cy.get("#userDetailDone").click();
+    cy.get("#userDetailDialog").should("not.be.visible");
+    cy.get("#usersList")
+      .contains(".user-row strong", fullName)
+      .parents(".user-row")
+      .should("contain", email)
+      .and("contain", "Inactive");
+  });
+
   it("navigates from the dashboard to projects", () => {
     cy.get('.nav-item[data-view="projects"]').click();
     cy.get("#pageTitle").should("have.text", "Projects");
@@ -203,7 +278,7 @@ describe("TaskForge authenticated navigation", () => {
       });
   });
 
-  it("archives a Done task and removes it from the board", () => {
+  it("moves an In Progress task to Done and archives it", () => {
     const taskTitle = `Cypress archive task ${Date.now()}`;
 
     cy.get('.nav-item[data-view="projects"]').click();
@@ -228,11 +303,32 @@ describe("TaskForge authenticated navigation", () => {
     cy.get("#kanban").contains(".task-card", taskTitle).click();
     cy.get("#entityDialog").should("be.visible");
     cy.get("#archiveTaskButton").should("not.be.visible");
+    cy.get('select[name="boardColumnId"]').select("In Progress");
+
+    cy.intercept("PUT", "**/api/tasks/*").as("startArchivableTask");
+    cy.get("#dialogSubmit").click();
+    cy.wait("@startArchivableTask").then(({ response }) => {
+      expect(response.statusCode).to.eq(200);
+      expect(response.body.status).to.eq("In Progress");
+    });
+
+    cy.contains(".kanban-column .column-head h3", "In Progress")
+      .parents(".kanban-column")
+      .within(() => {
+        cy.contains(".task-card", taskTitle).should("be.visible").click();
+      });
+
+    cy.get("#entityDialog").should("be.visible");
+    cy.get("#archiveTaskButton").should("not.be.visible");
+    cy.get('select[name="boardColumnId"] option:selected').should("have.text", "In Progress");
     cy.get('select[name="boardColumnId"]').select("Done");
 
     cy.intercept("PUT", "**/api/tasks/*").as("completeArchivableTask");
     cy.get("#dialogSubmit").click();
-    cy.wait("@completeArchivableTask").its("response.statusCode").should("eq", 200);
+    cy.wait("@completeArchivableTask").then(({ response }) => {
+      expect(response.statusCode).to.eq(200);
+      expect(response.body.status).to.eq("Done");
+    });
 
     cy.contains(".kanban-column .column-head h3", "Done")
       .parents(".kanban-column")
