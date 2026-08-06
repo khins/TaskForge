@@ -295,7 +295,7 @@ describe("TaskForge authenticated navigation", () => {
       });
   });
 
-  it("moves a newly created task to In Progress", () => {
+  it("drags a newly created task to In Progress", () => {
     const taskTitle = `Cypress move task ${Date.now()}`;
 
     cy.get('.nav-item[data-view="projects"]').click();
@@ -317,16 +317,46 @@ describe("TaskForge authenticated navigation", () => {
     cy.get("#dialogSubmit").click();
     cy.wait("@createMovableTask").its("response.statusCode").should("eq", 201);
 
-    cy.get("#kanban").contains(".task-card", taskTitle).click();
-    cy.get("#entityDialog").should("be.visible");
-    cy.get("#deleteTaskButton").should("be.enabled").and("have.text", "Delete task");
-    cy.get('select[name="boardColumnId"]').select("In Progress");
+    cy.contains(".kanban-column .column-head h3", "Todo")
+      .parents(".kanban-column")
+      .within(() => {
+        cy.contains(".task-card", taskTitle)
+          .should("be.visible")
+          .and("have.attr", "draggable", "true");
+      });
 
-    cy.intercept("PUT", "**/api/tasks/*").as("moveTask");
-    cy.get("#dialogSubmit").click();
-    cy.wait("@moveTask").its("response.statusCode").should("eq", 200);
+    cy.intercept("PATCH", "**/api/tasks/*/move").as("dragTask");
+    cy.window().then(win => {
+      const dataTransfer = new win.DataTransfer();
 
-    cy.get("#toast").should("contain", "Task updated");
+      cy.get("#kanban").contains(".task-card", taskTitle)
+        .trigger("dragstart", { dataTransfer });
+
+      cy.contains(".kanban-column .column-head h3", "In Progress")
+        .parents(".kanban-column")
+        .then($column => {
+          const destinationColumnId = Number($column.attr("data-column"));
+
+          cy.wrap($column)
+            .trigger("dragover", { dataTransfer })
+            .trigger("drop", { dataTransfer });
+          cy.get("#kanban").trigger("dragend", { dataTransfer });
+
+          cy.wait("@dragTask").then(({ request, response }) => {
+            expect(request.body.boardColumnId).to.eq(destinationColumnId);
+            expect(request.body.status).to.eq("In Progress");
+            expect(response.statusCode).to.eq(200);
+            expect(response.body.status).to.eq("In Progress");
+          });
+        });
+    });
+
+    cy.get("#toast").should("contain", `"${taskTitle}" moved to In Progress`);
+    cy.contains(".kanban-column .column-head h3", "Todo")
+      .parents(".kanban-column")
+      .within(() => {
+        cy.contains(".task-card", taskTitle).should("not.exist");
+      });
     cy.contains(".kanban-column .column-head h3", "In Progress")
       .parents(".kanban-column")
       .within(() => {

@@ -201,11 +201,14 @@ button { cursor: pointer; }
 .label-filter select:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(23,107,91,.1); }
 .filter-result { align-self: center; color: var(--muted); font-size: 11px; white-space: nowrap; }
 .kanban { display: grid; grid-auto-columns: minmax(270px, 1fr); grid-auto-flow: column; gap: 14px; overflow-x: auto; padding-bottom: 20px; }
-.kanban-column { min-height: 450px; padding: 14px; background: #eceee9; border-radius: 12px; }
+.kanban-column { min-height: 450px; padding: 14px; background: #eceee9; border-radius: 12px; transition: background .18s, box-shadow .18s; }
+.kanban-column.drop-target { background: #dfece6; box-shadow: inset 0 0 0 2px var(--green); }
 .column-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .column-head h3 { margin: 0; font: 700 13px "Manrope"; text-transform: uppercase; letter-spacing: .5px; }
 .count-pill { min-width: 24px; padding: 4px 7px; color: var(--muted); background: white; border-radius: 99px; text-align: center; font-size: 10px; }
-.task-card { display: block; width: 100%; margin-bottom: 10px; padding: 15px; color: var(--ink); background: white; border: 1px solid #e0e4df; border-radius: 9px; box-shadow: 0 3px 12px rgba(34,52,47,.04); text-align: left; transition: .2s; }
+.task-card { display: block; width: 100%; margin-bottom: 10px; padding: 15px; color: var(--ink); background: white; border: 1px solid #e0e4df; border-radius: 9px; box-shadow: 0 3px 12px rgba(34,52,47,.04); text-align: left; cursor: grab; transition: .2s; }
+.task-card:active { cursor: grabbing; }
+.task-card.dragging { opacity: .45; transform: rotate(1deg) scale(.98); }
 .task-card:hover { transform: translateY(-2px); border-color: #aebfb7; box-shadow: 0 8px 22px rgba(34,52,47,.09); }
 .task-card:focus-visible { outline: 3px solid rgba(23,107,91,.2); border-color: var(--green); }
 .task-card h4 { margin: 8px 0; font-size: 13px; }.task-card p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.45; }

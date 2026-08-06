@@ -17,6 +17,8 @@ const state = {
   comments: [],
   editingCommentId: null,
   attachments: [],
+  draggedTaskId: null,
+  suppressTaskClick: false,
   authMode: "login",
   dialogMode: null
 };
@@ -535,11 +537,36 @@ function renderBoard() {
   $("clearLabelFilter").classList.toggle("hidden", !state.labelFilter);
   $("kanban").innerHTML = state.board.columns.map(column => {
     const tasks = matchingTasks.filter(task => task.boardColumnId === column.id);
-    return `<section class="kanban-column">
+    return `<section class="kanban-column" data-column="${column.id}">
       <div class="column-head"><h3>${escapeHtml(column.name)}</h3><span class="count-pill">${tasks.length}</span></div>
-      ${tasks.map(task => `<button class="task-card" data-task="${task.id}" type="button" aria-label="Edit ${escapeHtml(task.title)}"><div class="task-badges"><span class="priority ${task.priority.toLowerCase()}">${escapeHtml(task.priority)}</span>${(task.labels || []).map(label => `<span class="task-label" style="--label-color:${safeColor(label.color)}">${escapeHtml(label.name)}</span>`).join("")}</div><h4>${escapeHtml(task.title)}</h4><p>${escapeHtml(task.description || "No description")}</p><div class="task-meta">${task.dueDate ? `Due ${new Date(task.dueDate).toLocaleDateString()}` : "No due date"}<span>Edit →</span></div></button>`).join("")}
+      ${tasks.map(task => `<button class="task-card" data-task="${task.id}" draggable="true" type="button" aria-label="Edit ${escapeHtml(task.title)}" title="Drag to move or click to edit"><div class="task-badges"><span class="priority ${task.priority.toLowerCase()}">${escapeHtml(task.priority)}</span>${(task.labels || []).map(label => `<span class="task-label" style="--label-color:${safeColor(label.color)}">${escapeHtml(label.name)}</span>`).join("")}</div><h4>${escapeHtml(task.title)}</h4><p>${escapeHtml(task.description || "No description")}</p><div class="task-meta">${task.dueDate ? `Due ${new Date(task.dueDate).toLocaleDateString()}` : "No due date"}<span>Edit →</span></div></button>`).join("")}
     </section>`;
   }).join("");
+}
+
+function clearTaskDropState() {
+  document.querySelectorAll(".kanban-column.drop-target").forEach(column => column.classList.remove("drop-target"));
+  document.querySelectorAll(".task-card.dragging").forEach(card => card.classList.remove("dragging"));
+}
+
+async function moveTaskToColumn(taskId, columnId) {
+  const task = state.tasks.find(item => item.id === Number(taskId));
+  const column = state.board?.columns.find(item => item.id === Number(columnId));
+  if (!task || !column || Number(task.boardColumnId) === Number(column.id)) return;
+
+  const position = state.tasks.filter(item => Number(item.boardColumnId) === Number(column.id)).length;
+  try {
+    const movedTask = await api(`/api/tasks/${task.id}/move`, {
+      method: "PATCH",
+      body: JSON.stringify({ boardColumnId: column.id, position, status: column.name })
+    });
+    Object.assign(task, movedTask, { labels: task.labels || [] });
+    renderBoard();
+    toast(`"${task.title}" moved to ${column.name}.`);
+  } catch (error) {
+    renderBoard();
+    toast(error.message, "error");
+  }
 }
 
 function emptyState(title, text) {
@@ -1081,10 +1108,44 @@ $("labelsGrid").addEventListener("click", event => {
   if (deleteId) deleteLabel(deleteId);
 });
 $("kanban").addEventListener("click", e => {
+  if (state.suppressTaskClick) return;
   const card = e.target.closest("[data-task]");
   if (!card) return;
   const task = state.tasks.find(item => item.id === Number(card.dataset.task));
   if (task) api(`/api/tasks/${task.id}`).then(detail => openDialog("editTask", detail)).catch(error => toast(error.message, "error"));
+});
+$("kanban").addEventListener("dragstart", event => {
+  const card = event.target.closest("[data-task]");
+  if (!card) return;
+  state.draggedTaskId = Number(card.dataset.task);
+  state.suppressTaskClick = true;
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", card.dataset.task);
+  requestAnimationFrame(() => card.classList.add("dragging"));
+});
+$("kanban").addEventListener("dragover", event => {
+  const column = event.target.closest("[data-column]");
+  if (!column || !state.draggedTaskId) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+  document.querySelectorAll(".kanban-column.drop-target").forEach(item => item.classList.toggle("drop-target", item === column));
+});
+$("kanban").addEventListener("dragleave", event => {
+  const column = event.target.closest("[data-column]");
+  if (column && !column.contains(event.relatedTarget)) column.classList.remove("drop-target");
+});
+$("kanban").addEventListener("drop", event => {
+  const column = event.target.closest("[data-column]");
+  if (!column) return;
+  event.preventDefault();
+  const taskId = Number(event.dataTransfer.getData("text/plain") || state.draggedTaskId);
+  clearTaskDropState();
+  moveTaskToColumn(taskId, Number(column.dataset.column));
+});
+$("kanban").addEventListener("dragend", () => {
+  clearTaskDropState();
+  state.draggedTaskId = null;
+  setTimeout(() => { state.suppressTaskClick = false; }, 0);
 });
 $("backToProjects").addEventListener("click", () => history.back());
 $("backToProject").addEventListener("click", () => history.back());
