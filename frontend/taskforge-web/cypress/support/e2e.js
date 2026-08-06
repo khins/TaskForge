@@ -42,6 +42,78 @@ describe("TaskForge authenticated navigation", () => {
     cy.get("#projectSearch").should("be.visible");
   });
 
+  it("creates a new project with a board", () => {
+    const projectName = `Cypress project ${Date.now()}`;
+    const projectDescription = "Created by the Cypress end-to-end test.";
+    const boardName = `Cypress board ${Date.now()}`;
+    const boardDescription = "Default workflow created by Cypress.";
+
+    cy.get('.nav-item[data-view="projects"]').click();
+    cy.get("#projectsView").should("be.visible");
+    cy.get("#primaryAction")
+      .should("be.visible")
+      .and("contain", "New project")
+      .click();
+
+    cy.get("#entityDialog").should("be.visible");
+    cy.get("#dialogTitle").should("have.text", "What are you working on?");
+    cy.get('input[name="name"]').type(projectName);
+    cy.get('textarea[name="description"]').type(projectDescription);
+
+    cy.intercept("POST", "**/api/projects").as("createProject");
+    cy.get("#dialogSubmit").should("have.text", "Create project").click();
+
+    cy.wait("@createProject").then(({ request, response }) => {
+      expect(request.body.name).to.eq(projectName);
+      expect(request.body.description).to.eq(projectDescription);
+      expect(response.statusCode).to.eq(201);
+      expect(response.body.name).to.eq(projectName);
+    });
+
+    cy.get("#entityDialog").should("not.be.visible");
+    cy.get("#toast").should("contain", "Project created");
+    cy.get("#projectsGrid")
+      .contains(".project-card h3", projectName)
+      .should("be.visible")
+      .parents(".project-card")
+      .should("contain", projectDescription);
+
+    cy.get("#projectsGrid")
+      .contains(".project-card h3", projectName)
+      .parents(".project-card")
+      .find("[data-project]")
+      .click({ force: true });
+
+    cy.get("#projectView").should("be.visible");
+    cy.get("#newBoardButton").should("be.visible").click();
+    cy.get("#entityDialog").should("be.visible");
+    cy.get("#dialogTitle").should("have.text", "Add a workflow");
+    cy.get('input[name="name"]').type(boardName);
+    cy.get('textarea[name="description"]').type(boardDescription);
+    cy.get('select[name="createDefaultColumns"]').select("true");
+
+    cy.intercept("POST", "**/api/projects/*/boards").as("createBoard");
+    cy.get("#dialogSubmit").should("have.text", "Create board").click();
+
+    cy.wait("@createBoard").then(({ request, response }) => {
+      expect(request.body.name).to.eq(boardName);
+      expect(request.body.description).to.eq(boardDescription);
+      expect(request.body.createDefaultColumns).to.eq(true);
+      expect(response.statusCode).to.eq(201);
+      expect(response.body.name).to.eq(boardName);
+      expect(response.body.columnCount).to.eq(3);
+    });
+
+    cy.get("#entityDialog").should("not.be.visible");
+    cy.get("#toast").should("contain", "Board created");
+    cy.get("#boardsGrid")
+      .contains(".board-card h3", boardName)
+      .should("be.visible")
+      .parents(".board-card")
+      .should("contain", boardDescription)
+      .and("contain", "3 columns");
+  });
+
   it("opens the first project and board", () => {
     cy.get('.nav-item[data-view="projects"]').click();
 
