@@ -35,7 +35,7 @@ public class TasksController : ControllerBase
 
         var tasks = await _context.Tasks
             .AsNoTracking()
-            .Where(t => t.ProjectId == projectId)
+            .Where(t => t.ProjectId == projectId && t.ArchivedAt == null)
             .OrderBy(t => t.BoardColumnId == null)
             .ThenBy(t => t.BoardColumnId)
             .ThenBy(t => t.Position)
@@ -68,7 +68,7 @@ public class TasksController : ControllerBase
 
         var tasks = await _context.Tasks
             .AsNoTracking()
-            .Where(t => t.BoardColumn != null && t.BoardColumn.BoardId == boardId)
+            .Where(t => t.ArchivedAt == null && t.BoardColumn != null && t.BoardColumn.BoardId == boardId)
             .OrderBy(t => t.BoardColumnId)
             .ThenBy(t => t.Position)
             .ThenBy(t => t.CreatedAt)
@@ -325,6 +325,38 @@ public class TasksController : ControllerBase
         return NoContent();
     }
 
+    [HttpPatch("tasks/{id:long}/archive")]
+    public async Task<IActionResult> ArchiveTask(long id)
+    {
+        var currentUserId = GetCurrentUserId();
+        if (currentUserId is null)
+        {
+            return Unauthorized();
+        }
+
+        var task = await _context.Tasks.SingleOrDefaultAsync(t => t.Id == id);
+        if (task is null || !await CanViewProject(task.ProjectId, currentUserId.Value))
+        {
+            return NotFound(new { Message = "Task not found." });
+        }
+
+        if (task.ArchivedAt is not null)
+        {
+            return Conflict(new { Message = "Task is already archived." });
+        }
+
+        if (!string.Equals(task.Status, "Done", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { Message = "Only Done tasks can be archived." });
+        }
+
+        task.ArchivedAt = DateTime.UtcNow;
+        task.UpdatedAt = task.ArchivedAt.Value;
+        await _context.SaveChangesAsync();
+
+        return Ok(ToSummaryResponse(task));
+    }
+
     private async Task<bool> CanViewProject(long projectId, long userId)
     {
         if (User.IsInRole("admin")) return await _context.Projects.AnyAsync(p => p.Id == projectId);
@@ -404,6 +436,7 @@ public class TasksController : ControllerBase
             task.Priority,
             task.Position,
             task.DueDate,
+            task.ArchivedAt,
             task.CreatedAt,
             task.UpdatedAt);
     }
@@ -452,6 +485,7 @@ public record TaskSummaryResponse(
     string Priority,
     int Position,
     DateTime? DueDate,
+    DateTime? ArchivedAt,
     DateTime CreatedAt,
     DateTime UpdatedAt);
 

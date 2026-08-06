@@ -8,6 +8,7 @@ public class TaskItem
     public string Status { get; set; } = "Todo";
     public string Priority { get; set; } = "Medium";
     public DateTime? DueDate { get; set; }
+    public DateTime? ArchivedAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

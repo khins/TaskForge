@@ -39,9 +39,10 @@ public class DashboardController : ControllerBase
         var accessibleTasks = _context.Tasks
             .AsNoTracking()
             .Where(t =>
-                isGlobalAdmin ||
-                t.Project.OwnerId == currentUserId.Value ||
-                t.Project.Members.Any(m => m.UserId == currentUserId.Value));
+                t.ArchivedAt == null &&
+                (isGlobalAdmin ||
+                 t.Project.OwnerId == currentUserId.Value ||
+                 t.Project.Members.Any(m => m.UserId == currentUserId.Value)));
 
         var projectCount = await accessibleProjects.CountAsync();
         var taskCount = await accessibleTasks.CountAsync();

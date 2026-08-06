@@ -113,6 +113,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.Priority).HasColumnName("priority").HasMaxLength(50);
             entity.Property(x => x.Position).HasColumnName("position");
             entity.Property(x => x.DueDate).HasColumnName("due_date");
+            entity.Property(x => x.ArchivedAt).HasColumnName("archived_at");
             entity.Property(x => x.CreatedAt).HasColumnName("created_at");
             entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
             entity.HasOne(x => x.Project).WithMany(x => x.Tasks)

@@ -644,6 +644,11 @@ function openDialog(mode, task = null) {
   deleteTaskButton.classList.toggle("hidden", mode !== "editTask");
   deleteTaskButton.disabled = false;
   deleteTaskButton.textContent = "Delete task";
+  const archiveTaskButton = $("archiveTaskButton");
+  const canArchiveTask = mode === "editTask" && task?.status?.toLowerCase() === "done";
+  archiveTaskButton.classList.toggle("hidden", !canArchiveTask);
+  archiveTaskButton.disabled = false;
+  archiveTaskButton.textContent = "Archive task";
   $("entityDialog").showModal();
   if (mode === "editTask") {
     loadComments(task.id);
@@ -668,6 +673,29 @@ async function deleteSelectedTask() {
     toast(error.message, "error");
     button.disabled = false;
     button.textContent = "Delete task";
+  }
+}
+
+async function archiveSelectedTask() {
+  const task = state.selectedTask;
+  if (!task || task.status?.toLowerCase() !== "done") {
+    return toast("Only Done tasks can be archived.", "error");
+  }
+  if (!confirm(`Archive "${task.title}"?\n\nThe task will be removed from the Kanban board but its history will be preserved.`)) return;
+
+  const button = $("archiveTaskButton");
+  button.disabled = true;
+  button.textContent = "Archiving…";
+  try {
+    await api(`/api/tasks/${task.id}/archive`, { method: "PATCH" });
+    $("entityDialog").close();
+    state.selectedTask = null;
+    await openBoard(state.board.id);
+    toast(`"${task.title}" was archived.`);
+  } catch (error) {
+    toast(error.message, "error");
+    button.disabled = false;
+    button.textContent = "Archive task";
   }
 }
 
@@ -1096,6 +1124,7 @@ $("dialogFields").addEventListener("input", event => {
 $("dialogClose").addEventListener("click", () => $("entityDialog").close());
 $("dialogCancel").addEventListener("click", () => $("entityDialog").close());
 $("deleteTaskButton").addEventListener("click", deleteSelectedTask);
+$("archiveTaskButton").addEventListener("click", archiveSelectedTask);
 $("userDetailClose").addEventListener("click", () => $("userDetailDialog").close());
 $("userDetailDone").addEventListener("click", () => $("userDetailDialog").close());
 $("deleteUserButton").addEventListener("click", deleteSelectedUser);
