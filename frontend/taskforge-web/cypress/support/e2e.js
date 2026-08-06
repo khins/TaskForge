@@ -169,4 +169,67 @@ describe("TaskForge authenticated navigation", () => {
     cy.get("#toast").should("contain", `"${taskTitle}" was deleted`);
     cy.get("#kanban").contains(".task-card", taskTitle).should("not.exist");
   });
+
+  it("creates a task with the Development label", () => {
+    const taskTitle = `Cypress labeled task ${Date.now()}`;
+
+    cy.get('.nav-item[data-view="projects"]').click();
+    cy.get("#projectsGrid .project-card")
+      .first()
+      .find("[data-project]")
+      .click({ force: true });
+
+    cy.get("#labelsGrid").then($labelsGrid => {
+      const hasDevelopmentLabel = [...$labelsGrid.find(".label-card strong")]
+        .some(label => label.textContent.trim().toLowerCase() === "development");
+
+      if (!hasDevelopmentLabel) {
+        cy.get("#newLabelButton").click();
+        cy.get('input[name="name"]').type("Development");
+        cy.intercept("POST", "**/api/projects/*/labels").as("createDevelopmentLabel");
+        cy.get("#dialogSubmit").click();
+        cy.wait("@createDevelopmentLabel").its("response.statusCode").should("eq", 201);
+        cy.get("#entityDialog").should("not.be.visible");
+        cy.get("#labelsGrid").contains(".label-card strong", "Development").should("be.visible");
+      }
+    });
+
+    cy.get("#boardsGrid .board-card")
+      .first()
+      .find("[data-board]")
+      .click({ force: true });
+
+    cy.get("#newTaskButton").click();
+    cy.get("#entityDialog").should("be.visible");
+    cy.get('input[name="title"]').type(taskTitle);
+    cy.get('textarea[name="description"]').type("Created with the Development label by Cypress.");
+
+    cy.get(".label-picker label")
+      .filter((index, label) => label.textContent.trim().toLowerCase() === "development")
+      .should(labels => {
+        expect(labels.length, "available Development labels").to.be.greaterThan(0);
+      })
+      .first()
+      .find('input[name="labelIds"]')
+      .check();
+
+    cy.intercept("POST", "**/api/projects/*/tasks").as("createLabeledTask");
+    cy.intercept("POST", "**/api/tasks/*/labels/*").as("assignDevelopmentLabel");
+    cy.get("#dialogSubmit").click();
+
+    cy.wait("@createLabeledTask").its("response.statusCode").should("eq", 201);
+    cy.wait("@assignDevelopmentLabel").then(({ response }) => {
+      expect(response.statusCode).to.eq(200);
+      expect(response.body.name).to.be.a("string");
+      expect(response.body.name.toLowerCase()).to.eq("development");
+    });
+    cy.get("#entityDialog").should("not.be.visible");
+
+    cy.get("#kanban").contains(".task-card", taskTitle).should("be.visible").click();
+    cy.get("#entityDialog").should("be.visible");
+    cy.get(".label-picker label")
+      .filter((index, label) => label.textContent.trim().toLowerCase() === "development")
+      .find('input[name="labelIds"]:checked')
+      .should("have.length", 1);
+  });
 });
