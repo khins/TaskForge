@@ -239,6 +239,62 @@ describe("TaskForge authenticated navigation", () => {
     cy.get("#kanban").contains(".task-card", taskTitle).should("be.visible");
   });
 
+  it("sets a newly created task to Urgent with today's due date", () => {
+    const taskTitle = `Cypress urgent task ${Date.now()}`;
+    const today = new Date();
+    const dueDate = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, "0"),
+      String(today.getDate()).padStart(2, "0")
+    ].join("-");
+    const displayedDueDate = new Date(`${dueDate}T12:00:00`).toLocaleDateString();
+
+    cy.get('.nav-item[data-view="projects"]').click();
+    cy.get("#projectsGrid .project-card")
+      .first()
+      .find("[data-project]")
+      .click({ force: true });
+
+    cy.get("#boardsGrid .board-card")
+      .first()
+      .find("[data-board]")
+      .click({ force: true });
+
+    cy.get("#newTaskButton").click();
+    cy.get('input[name="title"]').type(taskTitle);
+    cy.get('textarea[name="description"]').type("Created for the Cypress priority and due-date test.");
+
+    cy.intercept("POST", "**/api/projects/*/tasks").as("createUrgentTask");
+    cy.get("#dialogSubmit").click();
+    cy.wait("@createUrgentTask").its("response.statusCode").should("eq", 201);
+
+    cy.get("#kanban").contains(".task-card", taskTitle).click();
+    cy.get("#entityDialog").should("be.visible");
+    cy.get('select[name="priority"]').select("Urgent");
+    cy.get('input[name="dueDate"]').clear().type(dueDate);
+
+    cy.intercept("PUT", "**/api/tasks/*").as("updateUrgentTask");
+    cy.get("#dialogSubmit").click();
+
+    cy.wait("@updateUrgentTask").then(({ request, response }) => {
+      expect(request.body.priority).to.eq("Urgent");
+      expect(request.body.dueDate).to.include(dueDate);
+      expect(response.statusCode).to.eq(200);
+      expect(response.body.priority).to.eq("Urgent");
+      expect(response.body.dueDate).to.include(dueDate);
+    });
+
+    cy.get("#entityDialog").should("not.be.visible");
+    cy.get("#toast").should("contain", "Task updated");
+    cy.get("#kanban")
+      .contains(".task-card", taskTitle)
+      .should("be.visible")
+      .within(() => {
+        cy.get(".priority.urgent").should("have.text", "Urgent");
+        cy.get(".task-meta").should("contain", `Due ${displayedDueDate}`);
+      });
+  });
+
   it("moves a newly created task to In Progress", () => {
     const taskTitle = `Cypress move task ${Date.now()}`;
 
