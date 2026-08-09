@@ -142,8 +142,11 @@ function isGlobalAdmin() {
 
 async function loadCurrentUserProfile() {
   if (!state.user?.id) return;
+  const sessionToken = state.token;
+  const userId = state.user.id;
   try {
-    const profile = await api(`/api/Users/${state.user.id}`);
+    const profile = await api(`/api/Users/${userId}`);
+    if (!state.token || state.token !== sessionToken || !state.user) return;
     state.user = { ...state.user, ...profile, name: profile.fullName || state.user.name };
     localStorage.setItem("taskforge_user", JSON.stringify(state.user));
     renderCurrentUser();
