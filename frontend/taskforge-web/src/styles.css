@@ -231,6 +231,20 @@ dialog form { padding: 27px; }
 .button.danger { color: #9d3d37; background: #fff5f3; border: 1px solid #e8c7c3; }
 .button.danger:hover { color: white; background: #9d3d37; border-color: #9d3d37; }
 .attachments-section { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line); }
+.subtasks-section { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line); }
+.subtasks-list { margin: 12px 0; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.subtask-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto 14px; align-items: center; gap: 10px; width: 100%; padding: 11px 12px; color: var(--ink); background: white; border: 0; border-bottom: 1px solid var(--line); text-align: left; cursor: pointer; }
+.subtask-row:last-child { border-bottom: 0; }
+.subtask-row:hover { background: #f7f9f6; }
+.subtask-check { display: grid; place-items: center; width: 20px; height: 20px; color: white; border: 1px solid #aeb9b3; border-radius: 5px; font-size: 11px; }
+.subtask-check.done { background: var(--green); border-color: var(--green); }
+.subtask-copy { display: grid; min-width: 0; gap: 3px; }
+.subtask-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.subtask-copy small { color: var(--muted); font-size: 9px; }
+.subtask-composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 9px; }
+.subtask-composer input { min-width: 0; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; outline: none; }
+.subtask-composer input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(23,107,91,.1); }
+.subtask-parent-link { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 11px; }
 .attachments-list { max-height: 220px; margin: 18px 0; overflow-y: auto; }
 .attachment-item { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 10px 0; border-bottom: 1px solid #edf0ec; }
 .attachment-item:last-child { border-bottom: 0; }
@@ -292,4 +306,5 @@ dialog form { padding: 27px; }
   .user-table-head { display: none; }.user-row { grid-template-columns: minmax(0, 1fr) auto; gap: 10px; padding: 15px; }.user-row > span:nth-child(2), .user-row > span:nth-child(3) { grid-row: 2; }.user-row > span:nth-child(4) { display: none; }.user-row > span:last-child { grid-column: 2; grid-row: 1; }
   .user-detail-grid { grid-template-columns: 1fr; }
   .admin-user-fields { grid-template-columns: 1fr; }
+  .subtask-row { grid-template-columns: 24px minmax(0, 1fr) 14px; }.subtask-row .status-chip { display: none; }.subtask-composer { grid-template-columns: 1fr; }
 }

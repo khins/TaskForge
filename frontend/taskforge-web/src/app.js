@@ -17,6 +17,7 @@ const state = {
   comments: [],
   editingCommentId: null,
   attachments: [],
+  subtasks: [],
   draggedTaskId: null,
   suppressTaskClick: false,
   authMode: "login",
@@ -616,6 +617,19 @@ function taskFields(task = {}, includeComments = false) {
       ${state.labels.length ? state.labels.map(label => `<label><input type="checkbox" name="labelIds" value="${label.id}" ${(task.labels || []).some(item => item.id === label.id) ? "checked" : ""} /><span class="label-swatch" style="--label-color:${safeColor(label.color)}"></span>${escapeHtml(label.name)}</label>`).join("") : `<p>No project labels yet. Create labels from the project page first.</p>`}
     </fieldset>
     ${includeComments ? `
+      ${task.parentTaskId ? `
+        <section class="subtasks-section subtask-parent-link">
+          <span>This is a subtask.</span>
+          <button class="text-button" type="button" data-open-parent-task="${task.parentTaskId}">Open parent task →</button>
+        </section>` : `
+        <section class="subtasks-section" aria-labelledby="subtasksHeading">
+          <div class="comments-heading"><div><h3 id="subtasksHeading">Subtasks</h3><p>Break this task into smaller pieces of work.</p></div><span id="subtaskCount" class="count-pill">0</span></div>
+          <div id="subtasksList" class="subtasks-list"><p class="comments-empty">Loading subtasks…</p></div>
+          <div class="subtask-composer">
+            <input id="subtaskTitle" maxlength="300" placeholder="What needs to be done?" aria-label="New subtask title" />
+            <button id="addSubtaskButton" class="button secondary compact" type="button">Add subtask</button>
+          </div>
+        </section>`}
       <section class="attachments-section" aria-labelledby="attachmentsHeading">
         <div class="comments-heading"><div><h3 id="attachmentsHeading">Attachments</h3><p>Add files, screenshots, and supporting documents up to 10 MB.</p></div><span id="attachmentCount" class="count-pill">0</span></div>
         <div id="attachmentsList" class="attachments-list"><p class="comments-empty">Loading attachments…</p></div>
@@ -676,10 +690,69 @@ function openDialog(mode, task = null) {
   archiveTaskButton.classList.toggle("hidden", !canArchiveTask);
   archiveTaskButton.disabled = false;
   archiveTaskButton.textContent = "Archive task";
-  $("entityDialog").showModal();
+  if (!$("entityDialog").open) $("entityDialog").showModal();
   if (mode === "editTask") {
+    state.subtasks = [];
+    if (!task.parentTaskId) loadSubtasks(task.id);
     loadComments(task.id);
     loadAttachments(task.id);
+  }
+}
+
+async function loadSubtasks(taskId) {
+  try {
+    state.subtasks = await api(`/api/tasks/${taskId}/subtasks`);
+    renderSubtasks();
+  } catch (error) {
+    const list = $("subtasksList");
+    if (list) list.innerHTML = `<p class="comments-empty error-text">${escapeHtml(error.message)}</p>`;
+  }
+}
+
+function renderSubtasks() {
+  const list = $("subtasksList");
+  if (!list) return;
+  $("subtaskCount").textContent = state.subtasks.length;
+  list.innerHTML = state.subtasks.length ? state.subtasks.map(subtask => `
+    <button class="subtask-row" type="button" data-open-subtask="${subtask.id}">
+      <span class="subtask-check ${subtask.status?.toLowerCase() === "done" ? "done" : ""}" aria-hidden="true">${subtask.status?.toLowerCase() === "done" ? "✓" : ""}</span>
+      <span class="subtask-copy"><strong>${escapeHtml(subtask.title)}</strong><small>${escapeHtml(subtask.priority)}${subtask.dueDate ? ` · Due ${new Date(subtask.dueDate).toLocaleDateString()}` : ""}</small></span>
+      <span class="status-chip">${escapeHtml(subtask.status)}</span>
+      <span aria-hidden="true">→</span>
+    </button>`).join("") : `<p class="comments-empty">No subtasks yet. Add the first piece of work.</p>`;
+}
+
+async function createSubtask() {
+  const titleInput = $("subtaskTitle");
+  const title = titleInput?.value.trim();
+  if (!title) return toast("Enter a subtask title.", "error");
+
+  const button = $("addSubtaskButton");
+  button.disabled = true;
+  button.textContent = "Adding…";
+  try {
+    const subtask = await api(`/api/tasks/${state.selectedTask.id}/subtasks`, {
+      method: "POST",
+      body: JSON.stringify({ title })
+    });
+    state.subtasks.push(subtask);
+    titleInput.value = "";
+    renderSubtasks();
+    toast(`Subtask "${subtask.title}" added.`);
+  } catch (error) {
+    toast(error.message, "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = "Add subtask";
+  }
+}
+
+async function openTaskInDialog(taskId) {
+  try {
+    const task = await api(`/api/tasks/${taskId}`);
+    openDialog("editTask", task);
+  } catch (error) {
+    toast(error.message, "error");
   }
 }
 
@@ -1164,6 +1237,11 @@ $("clearLabelFilter").addEventListener("click", () => {
 $("primaryAction").addEventListener("click", e => openDialog(e.currentTarget.dataset.action || "project"));
 $("entityForm").addEventListener("submit", submitDialog);
 $("dialogFields").addEventListener("click", event => {
+  const subtaskButton = event.target.closest("[data-open-subtask]");
+  const parentTaskButton = event.target.closest("[data-open-parent-task]");
+  if (event.target.id === "addSubtaskButton") createSubtask();
+  if (subtaskButton) openTaskInDialog(subtaskButton.dataset.openSubtask);
+  if (parentTaskButton) openTaskInDialog(parentTaskButton.dataset.openParentTask);
   if (event.target.id === "postCommentButton") postComment();
   if (event.target.dataset.editComment) beginCommentEdit(event.target.dataset.editComment);
   if (event.target.dataset.cancelComment) cancelCommentEdit();

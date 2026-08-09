@@ -39,6 +39,7 @@ public class DashboardController : ControllerBase
         var accessibleTasks = _context.Tasks
             .AsNoTracking()
             .Where(t =>
+                t.ParentTaskId == null &&
                 t.ArchivedAt == null &&
                 (isGlobalAdmin ||
                  t.Project.OwnerId == currentUserId.Value ||

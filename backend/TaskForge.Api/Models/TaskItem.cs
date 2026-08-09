@@ -14,6 +14,9 @@ public class TaskItem
 
     public long ProjectId { get; set; }
     public Project Project { get; set; } = null!;
+    public long? ParentTaskId { get; set; }
+    public TaskItem? ParentTask { get; set; }
+    public ICollection<TaskItem> Subtasks { get; set; } = new List<TaskItem>();
     public long? BoardColumnId { get; set; }
     public BoardColumn? BoardColumn { get; set; }
     public long? AssigneeId { get; set; }

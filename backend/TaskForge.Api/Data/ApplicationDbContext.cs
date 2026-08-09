@@ -104,6 +104,7 @@ public class ApplicationDbContext : DbContext
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Id).HasColumnName("id");
             entity.Property(x => x.ProjectId).HasColumnName("project_id");
+            entity.Property(x => x.ParentTaskId).HasColumnName("parent_task_id");
             entity.Property(x => x.BoardColumnId).HasColumnName("board_column_id");
             entity.Property(x => x.AssigneeId).HasColumnName("assignee_id");
             entity.Property(x => x.ReporterId).HasColumnName("reporter_id");
@@ -118,6 +119,8 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
             entity.HasOne(x => x.Project).WithMany(x => x.Tasks)
                 .HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(x => x.ParentTask).WithMany(x => x.Subtasks)
+                .HasForeignKey(x => x.ParentTaskId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne(x => x.BoardColumn).WithMany(x => x.Tasks)
                 .HasForeignKey(x => x.BoardColumnId).OnDelete(DeleteBehavior.SetNull);
             entity.HasOne(x => x.Assignee).WithMany()

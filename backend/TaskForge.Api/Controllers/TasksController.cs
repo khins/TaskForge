@@ -35,7 +35,7 @@ public class TasksController : ControllerBase
 
         var tasks = await _context.Tasks
             .AsNoTracking()
-            .Where(t => t.ProjectId == projectId && t.ArchivedAt == null)
+            .Where(t => t.ProjectId == projectId && t.ParentTaskId == null && t.ArchivedAt == null)
             .OrderBy(t => t.BoardColumnId == null)
             .ThenBy(t => t.BoardColumnId)
             .ThenBy(t => t.Position)
@@ -68,7 +68,7 @@ public class TasksController : ControllerBase
 
         var tasks = await _context.Tasks
             .AsNoTracking()
-            .Where(t => t.ArchivedAt == null && t.BoardColumn != null && t.BoardColumn.BoardId == boardId)
+            .Where(t => t.ParentTaskId == null && t.ArchivedAt == null && t.BoardColumn != null && t.BoardColumn.BoardId == boardId)
             .OrderBy(t => t.BoardColumnId)
             .ThenBy(t => t.Position)
             .ThenBy(t => t.CreatedAt)
@@ -104,6 +104,7 @@ public class TasksController : ControllerBase
             .Select(t => new TaskDetailResponse(
                 t.Id,
                 t.ProjectId,
+                t.ParentTaskId,
                 t.BoardColumnId,
                 t.AssigneeId,
                 t.ReporterId,
@@ -132,6 +133,97 @@ public class TasksController : ControllerBase
             .SingleAsync();
 
         return Ok(task);
+    }
+
+    [HttpGet("tasks/{id:long}/subtasks")]
+    public async Task<IActionResult> GetSubtasks(long id)
+    {
+        var currentUserId = GetCurrentUserId();
+        if (currentUserId is null)
+        {
+            return Unauthorized();
+        }
+
+        var parent = await _context.Tasks.AsNoTracking().SingleOrDefaultAsync(t => t.Id == id);
+        if (parent is null || !await CanViewProject(parent.ProjectId, currentUserId.Value))
+        {
+            return NotFound(new { Message = "Task not found." });
+        }
+
+        var subtasks = await _context.Tasks
+            .AsNoTracking()
+            .Where(t => t.ParentTaskId == id && t.ArchivedAt == null)
+            .OrderBy(t => t.Position)
+            .ThenBy(t => t.CreatedAt)
+            .Select(t => ToSummaryResponse(t))
+            .ToListAsync();
+
+        return Ok(subtasks);
+    }
+
+    [HttpPost("tasks/{id:long}/subtasks")]
+    public async Task<IActionResult> CreateSubtask(long id, [FromBody] CreateSubtaskRequest request)
+    {
+        var currentUserId = GetCurrentUserId();
+        if (currentUserId is null)
+        {
+            return Unauthorized();
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Title))
+        {
+            return BadRequest(new { Message = "Subtask title is required." });
+        }
+
+        var parent = await _context.Tasks.SingleOrDefaultAsync(t => t.Id == id);
+        if (parent is null || !await CanViewProject(parent.ProjectId, currentUserId.Value))
+        {
+            return NotFound(new { Message = "Task not found." });
+        }
+
+        if (parent.ParentTaskId is not null)
+        {
+            return BadRequest(new { Message = "Subtasks cannot contain another subtask level." });
+        }
+
+        if (!await ValidateTaskReferences(parent.ProjectId, parent.BoardColumnId, request.AssigneeId))
+        {
+            return BadRequest(new { Message = "Assignee is not valid for this project." });
+        }
+
+        var now = DateTime.UtcNow;
+        var position = await _context.Tasks.CountAsync(t => t.ParentTaskId == id);
+        var subtask = new TaskItem
+        {
+            ProjectId = parent.ProjectId,
+            ParentTaskId = parent.Id,
+            BoardColumnId = parent.BoardColumnId,
+            AssigneeId = request.AssigneeId ?? parent.AssigneeId,
+            ReporterId = currentUserId.Value,
+            Title = request.Title.Trim(),
+            Description = request.Description,
+            Status = parent.Status,
+            Priority = string.IsNullOrWhiteSpace(request.Priority) ? "Medium" : request.Priority.Trim(),
+            Position = position,
+            DueDate = request.DueDate,
+            CreatedAt = now,
+            UpdatedAt = now,
+            StatusHistory =
+            {
+                new TaskStatusHistory
+                {
+                    FromStatus = null,
+                    ToStatus = parent.Status,
+                    ChangedById = currentUserId.Value,
+                    ChangedAt = now
+                }
+            }
+        };
+
+        _context.Tasks.Add(subtask);
+        await _context.SaveChangesAsync();
+
+        return CreatedAtAction(nameof(GetTask), new { id = subtask.Id }, ToSummaryResponse(subtask));
     }
 
     [HttpPost("projects/{projectId:long}/tasks")]
@@ -350,6 +442,18 @@ public class TasksController : ControllerBase
             return BadRequest(new { Message = "Only Done tasks can be archived." });
         }
 
+        var activeSubtaskCount = await _context.Tasks.CountAsync(t =>
+            t.ParentTaskId == task.Id &&
+            t.ArchivedAt == null &&
+            t.Status.ToLower() != "done");
+        if (activeSubtaskCount > 0)
+        {
+            return BadRequest(new
+            {
+                Message = $"Complete all subtasks before archiving this task. {activeSubtaskCount} {(activeSubtaskCount == 1 ? "subtask is" : "subtasks are")} still active."
+            });
+        }
+
         task.ArchivedAt = DateTime.UtcNow;
         task.UpdatedAt = task.ArchivedAt.Value;
         await _context.SaveChangesAsync();
@@ -427,6 +531,7 @@ public class TasksController : ControllerBase
         return new TaskSummaryResponse(
             task.Id,
             task.ProjectId,
+            task.ParentTaskId,
             task.BoardColumnId,
             task.AssigneeId,
             task.ReporterId,
@@ -473,9 +578,19 @@ public class MoveTaskRequest
     public string? Status { get; set; }
 }
 
+public class CreateSubtaskRequest
+{
+    public string Title { get; set; } = null!;
+    public string? Description { get; set; }
+    public string? Priority { get; set; }
+    public DateTime? DueDate { get; set; }
+    public long? AssigneeId { get; set; }
+}
+
 public record TaskSummaryResponse(
     long Id,
     long ProjectId,
+    long? ParentTaskId,
     long? BoardColumnId,
     long? AssigneeId,
     long? ReporterId,
@@ -492,6 +607,7 @@ public record TaskSummaryResponse(
 public record TaskDetailResponse(
     long Id,
     long ProjectId,
+    long? ParentTaskId,
     long? BoardColumnId,
     long? AssigneeId,
     long? ReporterId,

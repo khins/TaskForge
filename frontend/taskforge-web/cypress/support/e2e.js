@@ -239,6 +239,61 @@ describe("TaskForge authenticated navigation", () => {
     cy.get("#kanban").contains(".task-card", taskTitle).should("be.visible");
   });
 
+  it("creates a subtask under a parent task", () => {
+    const parentTitle = `Cypress parent task ${Date.now()}`;
+    const subtaskTitle = `Cypress subtask ${Date.now()}`;
+    let parentTaskId;
+
+    cy.get('.nav-item[data-view="projects"]').click();
+    cy.get("#projectsGrid .project-card")
+      .first()
+      .find("[data-project]")
+      .click({ force: true });
+
+    cy.get("#boardsGrid .board-card")
+      .first()
+      .find("[data-board]")
+      .click({ force: true });
+
+    cy.get("#newTaskButton").click();
+    cy.get('input[name="title"]').type(parentTitle);
+    cy.get('textarea[name="description"]').type("Parent task created for the Cypress subtask test.");
+
+    cy.intercept("POST", "**/api/projects/*/tasks").as("createParentTask");
+    cy.get("#dialogSubmit").click();
+    cy.wait("@createParentTask").then(({ response }) => {
+      expect(response.statusCode).to.eq(201);
+      expect(response.body.parentTaskId).to.eq(null);
+      parentTaskId = response.body.id;
+    });
+
+    cy.intercept("GET", "**/api/tasks/*/subtasks").as("loadSubtasks");
+    cy.get("#kanban").contains(".task-card", parentTitle).click();
+    cy.get("#entityDialog").should("be.visible");
+    cy.wait("@loadSubtasks").its("response.statusCode").should("eq", 200);
+    cy.get("#subtaskCount").should("have.text", "0");
+    cy.get("#subtaskTitle").type(subtaskTitle);
+
+    cy.intercept("POST", "**/api/tasks/*/subtasks").as("createSubtask");
+    cy.get("#addSubtaskButton").click();
+
+    cy.wait("@createSubtask").then(({ request, response }) => {
+      expect(request.body.title).to.eq(subtaskTitle);
+      expect(response.statusCode).to.eq(201);
+      expect(response.body.title).to.eq(subtaskTitle);
+      expect(response.body.parentTaskId).to.eq(parentTaskId);
+      expect(response.body.status).to.eq("Todo");
+    });
+
+    cy.get("#toast").should("contain", `Subtask "${subtaskTitle}" added`);
+    cy.get("#subtaskCount").should("have.text", "1");
+    cy.get("#subtasksList")
+      .contains(".subtask-row", subtaskTitle)
+      .should("be.visible")
+      .and("contain", "Medium")
+      .and("contain", "Todo");
+  });
+
   it("sets a newly created task to Urgent with today's due date", () => {
     const taskTitle = `Cypress urgent task ${Date.now()}`;
     const today = new Date();
