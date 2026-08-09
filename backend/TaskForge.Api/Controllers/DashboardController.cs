@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TaskForge.Api.Data;
+using TaskForge.Api.Models;
 
 namespace TaskForge.Api.Controllers;
 
@@ -128,6 +129,59 @@ public class DashboardController : ControllerBase
             tasksByPriority,
             recentTasks,
             overdueTasks));
+    }
+
+    [HttpGet("tasks")]
+    public async Task<IActionResult> GetDashboardTasks([FromQuery] string filter = "all")
+    {
+        var currentUserId = GetCurrentUserId();
+        if (currentUserId is null) return Unauthorized();
+
+        var now = DateTime.UtcNow;
+        var dueSoonCutoff = now.AddDays(7);
+        var normalizedFilter = filter.Trim().ToLowerInvariant();
+        var isGlobalAdmin = User.IsInRole("admin");
+        IQueryable<TaskItem> tasks = _context.Tasks
+            .AsNoTracking()
+            .Where(t =>
+                t.ParentTaskId == null &&
+                t.ArchivedAt == null &&
+                (isGlobalAdmin ||
+                 t.Project.OwnerId == currentUserId.Value ||
+                 t.Project.Members.Any(m => m.UserId == currentUserId.Value)));
+
+        tasks = normalizedFilter switch
+        {
+            "all" => tasks,
+            "assigned" => tasks.Where(t => t.AssigneeId == currentUserId.Value),
+            "overdue" => tasks.Where(t => t.DueDate != null && t.DueDate < now && t.Status != "Done"),
+            "duesoon" => tasks.Where(t => t.DueDate != null && t.DueDate >= now && t.DueDate <= dueSoonCutoff && t.Status != "Done"),
+            _ => null!
+        };
+
+        if (tasks is null)
+        {
+            return BadRequest(new { Message = "Filter must be all, assigned, overdue, or dueSoon." });
+        }
+
+        var results = await tasks
+            .OrderBy(t => t.DueDate == null)
+            .ThenBy(t => t.DueDate)
+            .ThenByDescending(t => t.UpdatedAt)
+            .Select(t => new DashboardTaskResponse(
+                t.Id,
+                t.ProjectId,
+                t.BoardColumn != null ? t.BoardColumn.BoardId : null,
+                t.Project.Name,
+                t.Title,
+                t.Status,
+                t.Priority,
+                t.AssigneeId,
+                t.DueDate,
+                t.UpdatedAt))
+            .ToListAsync();
+
+        return Ok(results);
     }
 
     private long? GetCurrentUserId()

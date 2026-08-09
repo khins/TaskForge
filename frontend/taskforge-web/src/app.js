@@ -253,6 +253,38 @@ function renderDashboardTasks(elementId, tasks, emptyMessage) {
     </button>`).join("") : `<p class="dashboard-empty">${emptyMessage}</p>`;
 }
 
+async function openDashboardDrilldown(filter) {
+  if (filter === "projects") {
+    await loadProjects();
+    showView("projects");
+    return;
+  }
+
+  const configs = {
+    all: ["All tasks", "All active parent tasks across your accessible projects."],
+    assigned: ["Assigned to me", "Active tasks currently assigned to you."],
+    overdue: ["Overdue tasks", "Active tasks whose due dates have passed."],
+    dueSoon: ["Due this week", "Active tasks due during the next seven days."]
+  };
+  const config = configs[filter];
+  if (!config) return;
+
+  $("dashboardDetailTitle").textContent = config[0];
+  $("dashboardDetailDescription").textContent = config[1];
+  $("dashboardDetailCount").textContent = "…";
+  $("dashboardDetailTasks").innerHTML = `<p class="dashboard-empty">Loading tasks…</p>`;
+  $("dashboardDetailDialog").showModal();
+
+  try {
+    const tasks = await api(`/api/Dashboard/tasks?filter=${encodeURIComponent(filter)}`);
+    $("dashboardDetailCount").textContent = tasks.length;
+    renderDashboardTasks("dashboardDetailTasks", tasks, "No tasks match this metric.");
+  } catch (error) {
+    $("dashboardDetailCount").textContent = "0";
+    $("dashboardDetailTasks").innerHTML = `<p class="dashboard-empty error-text">${escapeHtml(error.message)}</p>`;
+  }
+}
+
 async function openDashboardTask(taskId, projectId, boardId) {
   try {
     await openProject(projectId);
@@ -1164,6 +1196,18 @@ $("dashboardView").addEventListener("click", event => {
   const row = event.target.closest("[data-dashboard-task]");
   if (row) openDashboardTask(row.dataset.dashboardTask, row.dataset.dashboardProject, row.dataset.dashboardBoard);
 });
+$("dashboardMetrics").addEventListener("click", event => {
+  const metric = event.target.closest("[data-dashboard-drilldown]");
+  if (metric) openDashboardDrilldown(metric.dataset.dashboardDrilldown);
+});
+$("dashboardDetailTasks").addEventListener("click", event => {
+  const row = event.target.closest("[data-dashboard-task]");
+  if (!row) return;
+  $("dashboardDetailDialog").close();
+  openDashboardTask(row.dataset.dashboardTask, row.dataset.dashboardProject, row.dataset.dashboardBoard);
+});
+$("dashboardDetailClose").addEventListener("click", () => $("dashboardDetailDialog").close());
+$("dashboardDetailDone").addEventListener("click", () => $("dashboardDetailDialog").close());
 $("projectsGrid").addEventListener("click", e => e.target.dataset.project && openProject(e.target.dataset.project));
 $("projectHero").addEventListener("click", event => {
   if (event.target.id === "deleteProjectButton") deleteCurrentProject();

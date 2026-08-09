@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="src/styles.css?v=3" />
+    <link rel="stylesheet" href="src/styles.css?v=4" />
   </head>
   <body>
     <div id="toast" class="toast" role="status" aria-live="polite" popover="manual"></div>
@@ -84,11 +84,11 @@
 
         <section id="dashboardView" class="content">
           <div id="dashboardMetrics" class="dashboard-metrics">
-            <article><span class="metric-icon lavender">◆</span><div><small>Projects</small><strong id="dashboardProjectCount">—</strong></div></article>
-            <article><span class="metric-icon mint">✓</span><div><small>Total tasks</small><strong id="dashboardTaskCount">—</strong></div></article>
-            <article><span class="metric-icon blue">♙</span><div><small>Assigned to me</small><strong id="dashboardAssignedCount">—</strong></div></article>
-            <article><span class="metric-icon red">!</span><div><small>Overdue</small><strong id="dashboardOverdueCount">—</strong></div></article>
-            <article><span class="metric-icon peach">◷</span><div><small>Due this week</small><strong id="dashboardDueSoonCount">—</strong></div></article>
+            <button class="dashboard-metric" type="button" data-dashboard-drilldown="projects" aria-label="Open projects"><span class="metric-icon lavender">◆</span><span><small>Projects</small><strong id="dashboardProjectCount">—</strong></span><i>→</i></button>
+            <button class="dashboard-metric" type="button" data-dashboard-drilldown="all" aria-label="View all tasks"><span class="metric-icon mint">✓</span><span><small>Total tasks</small><strong id="dashboardTaskCount">—</strong></span><i>→</i></button>
+            <button class="dashboard-metric" type="button" data-dashboard-drilldown="assigned" aria-label="View tasks assigned to me"><span class="metric-icon blue">♙</span><span><small>Assigned to me</small><strong id="dashboardAssignedCount">—</strong></span><i>→</i></button>
+            <button class="dashboard-metric" type="button" data-dashboard-drilldown="overdue" aria-label="View overdue tasks"><span class="metric-icon red">!</span><span><small>Overdue</small><strong id="dashboardOverdueCount">—</strong></span><i>→</i></button>
+            <button class="dashboard-metric" type="button" data-dashboard-drilldown="dueSoon" aria-label="View tasks due this week"><span class="metric-icon peach">◷</span><span><small>Due this week</small><strong id="dashboardDueSoonCount">—</strong></span><i>→</i></button>
           </div>
           <div class="dashboard-grid">
             <article class="dashboard-panel">
@@ -190,6 +190,15 @@
       </div>
     </dialog>
 
-    <script src="src/app.js?v=31"></script>
+    <dialog id="dashboardDetailDialog">
+      <div class="dashboard-detail-shell">
+        <div class="dialog-head"><div><p class="eyebrow accent">Dashboard detail</p><h2 id="dashboardDetailTitle">Tasks</h2></div><button id="dashboardDetailClose" class="icon-button" type="button" aria-label="Close">×</button></div>
+        <div class="dashboard-detail-summary"><p id="dashboardDetailDescription">Tasks matching this dashboard metric.</p><span id="dashboardDetailCount" class="count-pill">0</span></div>
+        <div id="dashboardDetailTasks" class="dashboard-task-list"></div>
+        <div class="dialog-actions"><button id="dashboardDetailDone" class="button secondary" type="button">Close</button></div>
+      </div>
+    </dialog>
+
+    <script src="src/app.js?v=32"></script>
   </body>
 </html>
