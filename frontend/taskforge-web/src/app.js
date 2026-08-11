@@ -361,7 +361,7 @@ async function openUserDetail(id) {
         <button id="saveUserAdminButton" class="button secondary compact" type="button">Save account</button>
       </section>
       ${renderUserAssets(assets)}`;
-    $("userDetailDialog").showModal();
+    if (!$("userDetailDialog").open) $("userDetailDialog").showModal();
   } catch (error) { toast(error.message, "error"); }
 }
 
@@ -389,8 +389,8 @@ async function saveUserAdministration() {
       renderCurrentUser();
     }
     renderUsers();
-    toast("User account updated. Role changes take effect at the next sign-in.");
     await openUserDetail(updated.id);
+    toast("User account updated. Role changes take effect at the next sign-in.");
   } catch (error) {
     toast(error.message, "error");
     button.disabled = false;
