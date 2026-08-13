@@ -101,7 +101,8 @@ public class TasksController : ControllerBase
         var task = await _context.Tasks
             .AsNoTracking()
             .Where(t => t.Id == id)
-            .Select(t => new TaskDetailResponse(
+            .Select(t => new
+            {
                 t.Id,
                 t.ProjectId,
                 t.ParentTaskId,
@@ -114,25 +115,52 @@ public class TasksController : ControllerBase
                 t.Priority,
                 t.Position,
                 t.DueDate,
-                t.Comments.Count,
-                t.TaskLabels.Select(tl => new TaskLabelResponse(
-                    tl.LabelId,
-                    tl.Label.Name,
-                    tl.Label.Color)).ToList(),
-                t.StatusHistory
-                    .OrderByDescending(h => h.ChangedAt)
-                    .Select(h => new TaskStatusHistoryResponse(
-                        h.Id,
-                        h.FromStatus,
-                        h.ToStatus,
-                        h.ChangedById,
-                        h.ChangedAt))
-                    .ToList(),
                 t.CreatedAt,
-                t.UpdatedAt))
+                t.UpdatedAt
+            })
             .SingleAsync();
 
-        return Ok(task);
+        var commentCount = await _context.TaskComments.CountAsync(c => c.TaskId == id);
+
+        var labels = await _context.TaskLabels
+            .AsNoTracking()
+            .Where(tl => tl.TaskId == id)
+            .Select(tl => new TaskLabelResponse(
+                tl.LabelId,
+                tl.Label.Name,
+                tl.Label.Color))
+            .ToListAsync();
+
+        var statusHistory = await _context.TaskStatusHistory
+            .AsNoTracking()
+            .Where(h => h.TaskId == id)
+            .OrderByDescending(h => h.ChangedAt)
+            .Select(h => new TaskStatusHistoryResponse(
+                h.Id,
+                h.FromStatus,
+                h.ToStatus,
+                h.ChangedById,
+                h.ChangedAt))
+            .ToListAsync();
+
+        return Ok(new TaskDetailResponse(
+            task.Id,
+            task.ProjectId,
+            task.ParentTaskId,
+            task.BoardColumnId,
+            task.AssigneeId,
+            task.ReporterId,
+            task.Title,
+            task.Description,
+            task.Status,
+            task.Priority,
+            task.Position,
+            task.DueDate,
+            commentCount,
+            labels,
+            statusHistory,
+            task.CreatedAt,
+            task.UpdatedAt));
     }
 
     [HttpGet("tasks/{id:long}/subtasks")]

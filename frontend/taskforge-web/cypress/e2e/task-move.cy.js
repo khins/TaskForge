@@ -2,6 +2,7 @@ describe("TaskForge task movement", () => {
   const apiUrl = "http://127.0.0.1:5010";
   let projectId = null;
   let projectName;
+  let boardId = null;
   let boardName;
   let taskId = null;
   let taskTitle;
@@ -16,6 +17,7 @@ describe("TaskForge task movement", () => {
     }
 
     projectId = null;
+    boardId = null;
     taskId = null;
     const timestamp = Date.now();
     projectName = `Cypress move project ${timestamp}`;
@@ -51,10 +53,11 @@ describe("TaskForge task movement", () => {
           body: { name: boardName, description: "Temporary board for task movement.", createDefaultColumns: true }
         }).then(boardResponse => {
           expect(boardResponse.status).to.eq(201);
+          boardId = boardResponse.body.id;
 
           cy.request({
             method: "GET",
-            url: `${apiUrl}/api/boards/${boardResponse.body.id}`,
+            url: `${apiUrl}/api/boards/${boardId}`,
             headers
           }).then(boardDetailResponse => {
             const todoColumn = boardDetailResponse.body.columns.find(column => column.name === "Todo");
@@ -113,10 +116,22 @@ describe("TaskForge task movement", () => {
     cy.reload();
     cy.get("#appView").should("be.visible");
     cy.get('.nav-item[data-view="projects"]').click();
+    cy.intercept("GET", `**/api/projects/${projectId}`).as("openMoveProject");
+    cy.intercept("GET", `**/api/projects/${projectId}/labels`).as("openMoveLabels");
     cy.get("#projectsGrid").contains(".project-card h3", projectName)
       .parents(".project-card").find("[data-project]").click({ force: true });
-    cy.get("#boardsGrid").contains(".board-card h3", boardName)
-      .parents(".board-card").find("[data-board]").click({ force: true });
+    cy.wait("@openMoveProject");
+    cy.wait("@openMoveLabels");
+    cy.intercept("GET", `**/api/boards/${boardId}`).as("openMoveBoard");
+    cy.intercept("GET", `**/api/boards/${boardId}/tasks`).as("openMoveBoardTasks");
+    cy.window().then(win => {
+      expect(win.openBoard).to.be.a("function");
+      return win.openBoard(boardId, { historyMode: "replace" });
+    });
+    cy.wait("@openMoveBoard");
+    cy.wait("@openMoveBoardTasks");
+    cy.get("#boardView").should("be.visible");
+    cy.get("#boardTitle").should("have.text", boardName);
 
     cy.contains(".kanban-column .column-head h3", "Todo")
       .parents(".kanban-column")

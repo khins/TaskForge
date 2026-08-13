@@ -3,6 +3,7 @@ describe("TaskForge smoke test", () => {
   let sessionToken = null;
   let projectId = null;
   let projectName;
+  let boardId = null;
   let boardName;
   let taskId = null;
 
@@ -14,6 +15,7 @@ describe("TaskForge smoke test", () => {
 
     sessionToken = null;
     projectId = null;
+    boardId = null;
     taskId = null;
     const timestamp = Date.now();
     projectName = `Cypress smoke project ${timestamp}`;
@@ -76,7 +78,7 @@ describe("TaskForge smoke test", () => {
     // Provision an isolated project and board for task creation.
     cy.then(() => {
       const headers = { Authorization: `Bearer ${sessionToken}` };
-      cy.request({
+      return cy.request({
         method: "POST",
         url: `${apiUrl}/api/projects`,
         headers,
@@ -85,14 +87,40 @@ describe("TaskForge smoke test", () => {
         expect(projectResponse.status).to.eq(201);
         projectId = projectResponse.body.id;
 
-        cy.request({
+        return cy.request({
           method: "POST",
           url: `${apiUrl}/api/projects/${projectId}/boards`,
           headers,
           body: { name: boardName, description: "Temporary board for the smoke test.", createDefaultColumns: true }
         }).then(boardResponse => {
           expect(boardResponse.status).to.eq(201);
-          expect(boardResponse.body.columnCount).to.eq(3);
+          boardId = boardResponse.body.id;
+
+          return cy.request({
+            method: "GET",
+            url: `${apiUrl}/api/boards/${boardId}`,
+            headers,
+            timeout: 20000,
+            retryOnNetworkFailure: true,
+            retryOnStatusCodeFailure: true
+          }).then(boardDetailResponse => {
+            expect(boardDetailResponse.status).to.eq(200);
+            expect(boardDetailResponse.body.columns.map(column => column.name)).to.deep.eq([
+              "Todo",
+              "In Progress",
+              "Done"
+            ]);
+          }).then(() => cy.request({
+            method: "GET",
+            url: `${apiUrl}/api/projects/${projectId}`,
+            headers,
+            timeout: 20000,
+            retryOnNetworkFailure: true,
+            retryOnStatusCodeFailure: true
+          }).then(projectDetailResponse => {
+            expect(projectDetailResponse.status).to.eq(200);
+            expect(projectDetailResponse.body.boards.map(board => board.id)).to.include(boardId);
+          }));
         });
       });
     });
@@ -100,11 +128,16 @@ describe("TaskForge smoke test", () => {
     // User can create a task.
     cy.reload();
     cy.get("#appView").should("be.visible");
-    cy.get('.nav-item[data-view="projects"]').click();
-    cy.get("#projectsGrid").contains(".project-card h3", projectName)
-      .parents(".project-card").find("[data-project]").click({ force: true });
+    cy.window().then(win => {
+      expect(win.openProject).to.be.a("function");
+      return win.openProject(projectId, { historyMode: "replace" });
+    });
+    cy.get("#projectView").should("be.visible");
+    cy.get("#pageTitle").should("have.text", projectName);
     cy.get("#boardsGrid").contains(".board-card h3", boardName)
       .parents(".board-card").find("[data-board]").click({ force: true });
+    cy.get("#boardView").should("be.visible");
+    cy.get("#boardTitle").should("have.text", boardName);
     cy.get("#newTaskButton").click();
     cy.get('input[name="title"]').type(taskTitle);
     cy.get('textarea[name="description"]').type("Created by the TaskForge smoke test.");

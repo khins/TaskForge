@@ -100,19 +100,25 @@ describe("TaskForge task creation", () => {
     cy.reload();
     cy.get("#appView").should("be.visible");
     cy.get('.nav-item[data-view="projects"]').click();
+    cy.intercept("GET", `**/api/projects/${projectId}`).as("openTaskProject");
+    cy.intercept("GET", `**/api/projects/${projectId}/labels`).as("openTaskLabels");
     cy.get("#projectsGrid")
       .contains(".project-card h3", projectName)
       .parents(".project-card")
       .find("[data-project]")
       .click({ force: true });
-
-    cy.get("#boardsGrid")
-      .contains(".board-card h3", boardName)
-      .parents(".board-card")
-      .find("[data-board]")
-      .click({ force: true });
-
+    cy.wait("@openTaskProject");
+    cy.wait("@openTaskLabels");
+    cy.intercept("GET", `**/api/boards/${boardId}`).as("openTaskBoard");
+    cy.intercept("GET", `**/api/boards/${boardId}/tasks`).as("openTaskBoardTasks");
+    cy.window().then(win => {
+      expect(win.openBoard).to.be.a("function");
+      return win.openBoard(boardId, { historyMode: "replace" });
+    });
+    cy.wait("@openTaskBoard");
+    cy.wait("@openTaskBoardTasks");
     cy.get("#boardView").should("be.visible");
+    cy.get("#boardTitle").should("have.text", boardName);
     cy.get("#newTaskButton").click();
     cy.get("#entityDialog").should("be.visible");
     cy.get('input[name="title"]').type(taskTitle);

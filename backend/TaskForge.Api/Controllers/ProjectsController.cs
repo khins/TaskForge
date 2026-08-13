@@ -62,31 +62,15 @@ public class ProjectsController : ControllerBase
             .AsNoTracking()
             .Where(p => p.Id == id)
             .Where(p => isGlobalAdmin || p.OwnerId == currentUserId.Value || p.Members.Any(m => m.UserId == currentUserId.Value))
-            .Select(p => new ProjectDetailResponse(
+            .Select(p => new
+            {
                 p.Id,
                 p.Name,
                 p.Description,
                 p.OwnerId,
-                p.Members
-                    .OrderBy(m => m.JoinedAt)
-                    .Select(m => new ProjectMemberResponse(
-                        m.UserId,
-                        m.User.Email,
-                        m.User.FullName,
-                        m.Role,
-                        m.JoinedAt))
-                    .ToList(),
-                p.Boards
-                    .OrderBy(b => b.CreatedAt)
-                    .Select(b => new ProjectBoardResponse(
-                        b.Id,
-                        b.Name,
-                        b.Description,
-                        b.Columns.Count))
-                    .ToList(),
-                p.Tasks.Count,
                 p.CreatedAt,
-                p.UpdatedAt))
+                p.UpdatedAt
+            })
             .SingleOrDefaultAsync();
 
         if (project is null)
@@ -94,7 +78,41 @@ public class ProjectsController : ControllerBase
             return NotFound(new { Message = "Project not found." });
         }
 
-        return Ok(project);
+        var members = await _context.ProjectMembers
+            .AsNoTracking()
+            .Where(m => m.ProjectId == id)
+            .OrderBy(m => m.JoinedAt)
+            .Select(m => new ProjectMemberResponse(
+                m.UserId,
+                m.User.Email,
+                m.User.FullName,
+                m.Role,
+                m.JoinedAt))
+            .ToListAsync();
+
+        var boards = await _context.Boards
+            .AsNoTracking()
+            .Where(b => b.ProjectId == id)
+            .OrderBy(b => b.CreatedAt)
+            .Select(b => new ProjectBoardResponse(
+                b.Id,
+                b.Name,
+                b.Description,
+                b.Columns.Count))
+            .ToListAsync();
+
+        var taskCount = await _context.Tasks.CountAsync(t => t.ProjectId == id);
+
+        return Ok(new ProjectDetailResponse(
+            project.Id,
+            project.Name,
+            project.Description,
+            project.OwnerId,
+            members,
+            boards,
+            taskCount,
+            project.CreatedAt,
+            project.UpdatedAt));
     }
 
     [HttpPost]

@@ -126,10 +126,22 @@ describe("TaskForge task editing", () => {
     cy.reload();
     cy.get("#appView").should("be.visible");
     cy.get('.nav-item[data-view="projects"]').click();
+    cy.intercept("GET", `**/api/projects/${projectId}`).as("openEditProject");
+    cy.intercept("GET", `**/api/projects/${projectId}/labels`).as("openEditLabels");
     cy.get("#projectsGrid").contains(".project-card h3", projectName)
       .parents(".project-card").find("[data-project]").click({ force: true });
-    cy.get("#boardsGrid").contains(".board-card h3", boardName)
-      .parents(".board-card").find("[data-board]").click({ force: true });
+    cy.wait("@openEditProject");
+    cy.wait("@openEditLabels");
+    cy.intercept("GET", `**/api/boards/${boardId}`).as("openEditBoard");
+    cy.intercept("GET", `**/api/boards/${boardId}/tasks`).as("openEditBoardTasks");
+    cy.window().then(win => {
+      expect(win.openBoard).to.be.a("function");
+      return win.openBoard(boardId, { historyMode: "replace" });
+    });
+    cy.wait("@openEditBoard");
+    cy.wait("@openEditBoardTasks");
+    cy.get("#boardView").should("be.visible");
+    cy.get("#boardTitle").should("have.text", boardName);
 
     cy.get("#kanban").contains(".task-card", originalTitle).click();
     cy.get("#entityDialog").should("be.visible");

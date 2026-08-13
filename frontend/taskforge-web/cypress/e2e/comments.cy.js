@@ -2,6 +2,7 @@ describe("TaskForge task comments", () => {
   const apiUrl = "http://127.0.0.1:5010";
   let projectId = null;
   let projectName;
+  let boardId = null;
   let boardName;
   let taskId = null;
   let taskTitle;
@@ -16,6 +17,7 @@ describe("TaskForge task comments", () => {
     }
 
     projectId = null;
+    boardId = null;
     taskId = null;
     const timestamp = Date.now();
     projectName = `Cypress comment project ${timestamp}`;
@@ -51,10 +53,11 @@ describe("TaskForge task comments", () => {
           body: { name: boardName, description: "Temporary board for comment testing.", createDefaultColumns: true }
         }).then(boardResponse => {
           expect(boardResponse.status).to.eq(201);
+          boardId = boardResponse.body.id;
 
           cy.request({
             method: "GET",
-            url: `${apiUrl}/api/boards/${boardResponse.body.id}`,
+            url: `${apiUrl}/api/boards/${boardId}`,
             headers
           }).then(boardDetailResponse => {
             const todoColumn = boardDetailResponse.body.columns.find(column => column.name === "Todo");
@@ -114,14 +117,26 @@ describe("TaskForge task comments", () => {
 
     cy.reload();
     cy.get("#appView").should("be.visible");
-    cy.get('.nav-item[data-view="projects"]').click();
-    cy.get("#projectsGrid").contains(".project-card h3", projectName)
-      .parents(".project-card").find("[data-project]").click({ force: true });
-    cy.get("#boardsGrid").contains(".board-card h3", boardName)
-      .parents(".board-card").find("[data-board]").click({ force: true });
+    cy.window().then(win => {
+      expect(win.openProject).to.be.a("function");
+      return win.openProject(projectId, { historyMode: "replace" });
+    });
+    cy.get("#projectView").should("be.visible");
+    cy.intercept("GET", `**/api/boards/${boardId}`).as("openCommentBoard");
+    cy.intercept("GET", `**/api/boards/${boardId}/tasks`).as("openCommentBoardTasks");
+    cy.window().then(win => {
+      expect(win.openBoard).to.be.a("function");
+      return win.openBoard(boardId, { historyMode: "replace" });
+    });
+    cy.wait("@openCommentBoard");
+    cy.wait("@openCommentBoardTasks");
+    cy.get("#boardView").should("be.visible");
+    cy.get("#boardTitle").should("have.text", boardName);
 
+    cy.intercept("GET", `**/api/tasks/${taskId}`).as("loadCommentTask");
     cy.intercept("GET", `**/api/tasks/${taskId}/comments`).as("loadComments");
     cy.get("#kanban").contains(".task-card", taskTitle).click();
+    cy.wait("@loadCommentTask");
     cy.get("#entityDialog").should("be.visible");
     cy.wait("@loadComments").its("response.statusCode").should("eq", 200);
     cy.get("#commentCount").should("have.text", "0");

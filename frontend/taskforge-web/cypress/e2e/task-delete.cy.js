@@ -2,6 +2,7 @@ describe("TaskForge task deletion", () => {
   const apiUrl = "http://127.0.0.1:5010";
   let projectId = null;
   let projectName;
+  let boardId = null;
   let boardName;
   let taskId = null;
   let taskTitle;
@@ -16,6 +17,7 @@ describe("TaskForge task deletion", () => {
     }
 
     projectId = null;
+    boardId = null;
     taskId = null;
     const timestamp = Date.now();
     projectName = `Cypress delete project ${timestamp}`;
@@ -51,10 +53,11 @@ describe("TaskForge task deletion", () => {
           body: { name: boardName, description: "Temporary board for task deletion.", createDefaultColumns: true }
         }).then(boardResponse => {
           expect(boardResponse.status).to.eq(201);
+          boardId = boardResponse.body.id;
 
           cy.request({
             method: "GET",
-            url: `${apiUrl}/api/boards/${boardResponse.body.id}`,
+            url: `${apiUrl}/api/boards/${boardId}`,
             headers
           }).then(boardDetailResponse => {
             const todoColumn = boardDetailResponse.body.columns.find(column => column.name === "Todo");
@@ -114,10 +117,22 @@ describe("TaskForge task deletion", () => {
     cy.reload();
     cy.get("#appView").should("be.visible");
     cy.get('.nav-item[data-view="projects"]').click();
+    cy.intercept("GET", `**/api/projects/${projectId}`).as("openDeleteProject");
+    cy.intercept("GET", `**/api/projects/${projectId}/labels`).as("openDeleteLabels");
     cy.get("#projectsGrid").contains(".project-card h3", projectName)
       .parents(".project-card").find("[data-project]").click({ force: true });
-    cy.get("#boardsGrid").contains(".board-card h3", boardName)
-      .parents(".board-card").find("[data-board]").click({ force: true });
+    cy.wait("@openDeleteProject");
+    cy.wait("@openDeleteLabels");
+    cy.intercept("GET", `**/api/boards/${boardId}`).as("openDeleteBoard");
+    cy.intercept("GET", `**/api/boards/${boardId}/tasks`).as("openDeleteBoardTasks");
+    cy.window().then(win => {
+      expect(win.openBoard).to.be.a("function");
+      return win.openBoard(boardId, { historyMode: "replace" });
+    });
+    cy.wait("@openDeleteBoard");
+    cy.wait("@openDeleteBoardTasks");
+    cy.get("#boardView").should("be.visible");
+    cy.get("#boardTitle").should("have.text", boardName);
 
     cy.get("#kanban").contains(".task-card", taskTitle).should("be.visible").click();
     cy.get("#entityDialog").should("be.visible");
